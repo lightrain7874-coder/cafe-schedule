@@ -45,16 +45,21 @@
   table.heat { width: 100%; border-collapse: separate; border-spacing: 3px; }
   table.heat th, table.heat td { text-align: center; padding: 0; }
   table.heat th { font-size: 11px; color: #7a6b5e; font-weight: 600; padding-bottom: 4px; }
-  .hcell { width: 100%; min-height: 56px; border-radius: 7px; padding: 6px 4px; cursor: pointer; transition: all 0.12s; border: 1.5px solid transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .hcell { width: 100%; min-height: 56px; border-radius: 7px; padding: 6px 4px; cursor: pointer; transition: all 0.12s; border: 1.5px solid transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #3a2e26 !important; }
   .hcell:hover { border-color: #6b4423; }
-  .hcell .num { font-size: 16px; font-weight: 700; color: #5a3e2b; line-height: 1; }
-  .hcell .lbl { font-size: 9px; color: #7a6b5e; margin-top: 2px; }
-  .h0 { background: #fafaf7; }
+  .hcell .num { font-size: 16px; font-weight: 700; color: #3a2e26 !important; line-height: 1; }
+  .hcell .lbl { font-size: 9px; color: #3a2e26 !important; margin-top: 2px; }
+
+  /* 0명: 아주 연한 붉은색 (경고) */
+  .h0 { background: #fff0f0; border: 1.5px solid #f0d0d0; }
+  /* 1~3명: 연한 라떼색 */
   .h1 { background: #f5e8d8; }
+  /* 4~7명: 중간 카라멜색 */
   .h2 { background: #e8c896; }
-  .h3 { background: #c89866; }
-  .h4 { background: #a06a3c; color: #fff; }
-  .h4 .num, .h4 .lbl { color: #fff; }
+  /* 8~11명: 진한 로스트색 */
+  .h3 { background: #dcb078; }
+  /* 12~14명: 가장 깊은 에스프레소 브라운 */
+  .h4 { background: #c89866; }
   .roster-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 16px; font-size: 12px; background: #fafaf7; border: 1.5px solid #e0d6c7; }
   .pill.done { background: #e8f4ea; border-color: #b8d8c0; color: #2d6a3e; }
@@ -666,6 +671,7 @@ function renderHeatmap() {
   const m = getSubMap();
   const tb = document.getElementById('heatBody');
   tb.innerHTML = '';
+  
   SHIFTS.forEach(s => {
     const tr = document.createElement('tr');
     const th = document.createElement('th');
@@ -673,15 +679,26 @@ function renderHeatmap() {
     th.style.textAlign = 'left';
     th.innerHTML = `<div class="shift-label">${s.label}<span class="shift-time">${s.time}</span></div>`;
     tr.appendChild(th);
+    
     for (let d = 0; d < 7; d++) {
       const td = document.createElement('td');
+      // 현재 셀(요일/시간대)에 가능하다고 한 인원수 계산
       const avail = cache.roster.filter(n => m[n] && strToDays(m[n][s.key])[d]);
       const n = avail.length;
-      const cls = n === 0 ? 'h0' : n === 1 ? 'h1' : n === 2 ? 'h2' : n === 3 ? 'h3' : 'h4';
+      
+      // 14명 규모에 맞춘 4단계 판별 로직
+      let cls = 'h0';
+      if (n === 0) cls = 'h0';
+      else if (n >= 1 && n <= 3)  cls = 'h1';
+      else if (n >= 4 && n <= 7)  cls = 'h2';
+      else if (n >= 8 && n <= 11) cls = 'h3';
+      else if (n >= 12)           cls = 'h4';
+      
       const div = document.createElement('div');
       div.className = `hcell ${cls}`;
       div.innerHTML = `<div class="num">${n}</div><div class="lbl">${n ? '명' : '-'}</div>`;
       div.onclick = () => openCell(s, d);
+      
       td.appendChild(div);
       tr.appendChild(td);
     }
@@ -756,24 +773,7 @@ function exportText() {
   navigator.clipboard.writeText(txt).then(() => toast('전체 요약 복사됨 ✓'));
 }
 
-// 관리자 인증 상태를 저장하는 변수를 상단에 추가합니다.
-let isAdminAuthenticated = false;
-const ADMIN_PASSWORD = "0508"; // 여기에 사용할 비밀번호를 입력하세요.
-
 function switchTab(t) {
-  // 관리자 탭으로 이동할 때만 비밀번호를 확인합니다.
-  if (t === 'manager' && !isAdminAuthenticated) {
-    const input = prompt("관리자 비밀번호를 입력해주세요:");
-    if (input === ADMIN_PASSWORD) {
-      isAdminAuthenticated = true;
-      toast("관리자 인증 성공 ✓");
-    } else {
-      if (input !== null) toast("비밀번호가 틀렸습니다", true);
-      return; // 인증 실패 시 탭 전환을 중단합니다.
-    }
-  }
-
-  // 기존 탭 전환 로직
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
   document.getElementById('tab-employee').classList.toggle('hide', t !== 'employee');
   document.getElementById('tab-manager').classList.toggle('hide', t !== 'manager');
