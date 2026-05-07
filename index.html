@@ -245,10 +245,10 @@
       <div style="display:flex; gap:14px; font-size:11px; color:#7a6b5e; margin-top:10px; flex-wrap:wrap; align-items:center;">
         <span>인원수:</span>
         <span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h0" style="width:20px; min-height:14px; padding:0;"></span>0명</span>
-        <span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h1" style="width:20px; min-height:14px; padding:0;"></span>1</span>
-        <span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h2" style="width:20px; min-height:14px; padding:0;"></span>2</span>
-        <span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h3" style="width:20px; min-height:14px; padding:0;"></span>3</span>
-        <span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h4" style="width:20px; min-height:14px; padding:0;"></span>4+</span>
+<span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h1" style="width:20px; min-height:14px; padding:0;"></span>1-3</span>
+<span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h2" style="width:20px; min-height:14px; padding:0;"></span>4-7</span>
+<span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h3" style="width:20px; min-height:14px; padding:0;"></span>8-11</span>
+<span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h4" style="width:20px; min-height:14px; padding:0;"></span>12+</span>
       </div>
     </div>
 
@@ -550,13 +550,21 @@ async function clearWeekSubs() {
   else toast('실패: ' + res.error, true);
 }
 
+// 로컬 시간 기준으로 yyyy-MM-dd 포맷 (시간대 변환 없음)
+function fmtISO(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function nextMondayISO() {
   const now = new Date();
   const day = now.getDay();
   const diff = (8 - (day === 0 ? 7 : day)) % 7 || 7;
   const next = new Date(now);
   next.setDate(now.getDate() + diff);
-  return next.toISOString().slice(0, 10);
+  return fmtISO(next);  // toISOString 대신 로컬 시간 기준 포맷 사용
 }
 
 function fmtWeekRange(iso) {
@@ -570,6 +578,16 @@ function fmtWeekRange(iso) {
 function onWeekChange() {
   const v = document.getElementById('weekStart').value;
   if (!v) return;
+  
+  // 월요일인지 검증
+  const d = new Date(v + 'T00:00:00');
+  if (d.getDay() !== 1) {
+    alert('근무표 시작일은 항상 월요일이어야 합니다.\n월요일 날짜를 다시 선택해주세요.');
+    // 이전 값으로 되돌리기
+    document.getElementById('weekStart').value = week;
+    return;
+  }
+  
   week = v;
   localStorage.setItem('cs_week', week);
   renderEmployee();
