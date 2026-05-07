@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>투썸 대평점 근무관리</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background: #f5f1ea; color: #3a2e26; padding: 20px 14px; min-height: 100vh; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 22px; color: #5a3e2b; margin-bottom: 4px; }
+  .sub { font-size: 12px; color: #7a6b5e; margin-bottom: 18px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; background: #ede4d3; padding: 4px; border-radius: 12px; }
+  .tab { flex: 1; padding: 11px; border: none; background: transparent; cursor: pointer; border-radius: 9px; font-size: 14px; font-weight: 600; color: #7a6b5e; font-family: inherit; transition: all 0.15s; }
+  .tab.active { background: #fff; color: #5a3e2b; box-shadow: 0 1px 4px rgba(90,62,43,0.1); }
+  .card { background: #fff; border-radius: 14px; padding: 18px; box-shadow: 0 2px 12px rgba(90,62,43,0.06); margin-bottom: 14px; }
+  .card-title { font-size: 14px; font-weight: 700; color: #5a3e2b; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+  .card-title .muted { font-size: 11px; color: #9a8a7a; font-weight: 400; }
+  label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; color: #5a3e2b; }
+  input, select, textarea { width: 100%; padding: 9px 11px; border: 1.5px solid #e0d6c7; border-radius: 8px; font-size: 13px; font-family: inherit; background: #fafaf7; }
+  textarea { resize: vertical; min-height: 70px; line-height: 1.5; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: #b8895e; }
+  .row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .row > div { flex: 1; }
+  button { padding: 10px 14px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: #6b4423; color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: #5a3618; }
+  .btn-secondary { background: #ede4d3; color: #5a3e2b; }
+  .btn-secondary:hover:not(:disabled) { background: #ddd1bb; }
+  .btn-ghost { background: transparent; color: #7a6b5e; border: 1.5px solid #e0d6c7; }
+  .btn-ghost:hover:not(:disabled) { background: #fafaf7; }
+  .btn-danger { background: transparent; color: #c44; border: 1.5px solid #f0c4c4; }
+  .btn-danger:hover:not(:disabled) { background: #fef5f5; }
+  .btn-sm { padding: 6px 10px; font-size: 12px; }
+  table.grid { width: 100%; border-collapse: separate; border-spacing: 4px; }
+  table.grid th, table.grid td { text-align: center; padding: 0; }
+  table.grid th { font-size: 11px; color: #7a6b5e; font-weight: 600; padding-bottom: 4px; }
+  table.grid th.shift { text-align: left; padding-left: 4px; }
+  .cell { width: 100%; aspect-ratio: 1/1; border: 1.5px solid #e0d6c7; border-radius: 7px; background: #fafaf7; cursor: pointer; font-size: 12px; color: #b0a394; display: flex; align-items: center; justify-content: center; transition: all 0.12s; user-select: none; }
+  .cell:hover { border-color: #b8895e; }
+  .cell.selected { background: #6b4423; border-color: #6b4423; color: #fff; font-weight: 700; }
+  .shift-label { font-size: 11px; font-weight: 700; color: #5a3e2b; text-align: left; padding: 3px; line-height: 1.3; }
+  .shift-time { display: block; font-size: 9px; color: #9a8a7a; font-weight: 400; }
+  table.heat { width: 100%; border-collapse: separate; border-spacing: 3px; }
+  table.heat th, table.heat td { text-align: center; padding: 0; }
+  table.heat th { font-size: 11px; color: #7a6b5e; font-weight: 600; padding-bottom: 4px; }
+  .hcell { width: 100%; min-height: 56px; border-radius: 7px; padding: 6px 4px; cursor: pointer; transition: all 0.12s; border: 1.5px solid transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .hcell:hover { border-color: #6b4423; }
+  .hcell .num { font-size: 16px; font-weight: 700; color: #5a3e2b; line-height: 1; }
+  .hcell .lbl { font-size: 9px; color: #7a6b5e; margin-top: 2px; }
+  .h0 { background: #fafaf7; }
+  .h1 { background: #f5e8d8; }
+  .h2 { background: #e8c896; }
+  .h3 { background: #c89866; }
+  .h4 { background: #a06a3c; color: #fff; }
+  .h4 .num, .h4 .lbl { color: #fff; }
+  .roster-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 16px; font-size: 12px; background: #fafaf7; border: 1.5px solid #e0d6c7; }
+  .pill.done { background: #e8f4ea; border-color: #b8d8c0; color: #2d6a3e; }
+  .pill.pending { background: #fef0e0; border-color: #f5c896; color: #a05818; }
+  .pill .x { cursor: pointer; opacity: 0.5; font-size: 14px; line-height: 1; }
+  .pill .x:hover { opacity: 1; color: #c44; }
+  .stat-row { display: flex; gap: 10px; margin-bottom: 12px; }
+  .stat { flex: 1; background: #fafaf7; border-radius: 10px; padding: 12px; text-align: center; border: 1.5px solid #e8dfd1; }
+  .stat .n { font-size: 22px; font-weight: 700; color: #5a3e2b; }
+  .stat .l { font-size: 11px; color: #7a6b5e; margin-top: 2px; }
+  .stat.warn { background: #fef0e0; border-color: #f5c896; }
+  .stat.warn .n { color: #a05818; }
+  .stat.good { background: #e8f4ea; border-color: #b8d8c0; }
+  .stat.good .n { color: #2d6a3e; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #3a2e26; color: #fff; padding: 11px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 99; max-width: 90%; text-align: center; }
+  .toast.show { opacity: 1; }
+  .toast.err { background: #c44; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+  .modal-bg.show { display: flex; }
+  .modal { background: #fff; border-radius: 14px; padding: 20px; max-width: 480px; width: 100%; max-height: 80vh; overflow-y: auto; }
+  .modal h3 { font-size: 16px; color: #5a3e2b; margin-bottom: 6px; }
+  .modal .meta { font-size: 12px; color: #7a6b5e; margin-bottom: 12px; }
+  .name-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .name-tag { padding: 5px 10px; background: #f5e8d8; border-radius: 14px; font-size: 12px; color: #5a3e2b; display: inline-flex; align-items: center; gap: 4px; }
+  .name-tag .memo-icon { font-size: 11px; opacity: 0.85; }
+  .empty { color: #9a8a7a; font-size: 13px; text-align: center; padding: 20px; }
+  .hide { display: none !important; }
+  pre.box { background: #fafaf7; border: 1px solid #e0d6c7; border-radius: 8px; padding: 10px; font-size: 12px; white-space: pre-wrap; line-height: 1.5; font-family: ui-monospace, "SF Mono", Consolas, monospace; color: #3a2e26; }
+  .sync-bar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #fafaf7; border-radius: 8px; font-size: 11px; color: #7a6b5e; margin-bottom: 12px; }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #2d6a3e; animation: pulse 2s infinite; }
+  .sync-dot.err { background: #c44; animation: none; }
+  .sync-dot.loading { background: #b8895e; animation: pulse 0.8s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .config-banner { background: #fef0e0; border: 1.5px solid #f5c896; color: #a05818; padding: 12px; border-radius: 10px; margin-bottom: 14px; font-size: 13px; }
+  .config-banner code { background: #fff; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+  .memo-counter { font-size: 11px; color: #9a8a7a; text-align: right; margin-top: 4px; }
+  .memo-counter.warn { color: #a05818; font-weight: 600; }
+  .memo-item { padding: 10px 12px; border-radius: 10px; background: #fafaf7; border: 1.5px solid #e8dfd1; margin-bottom: 8px; }
+  .memo-item:last-child { margin-bottom: 0; }
+  .memo-item .name { font-size: 13px; font-weight: 700; color: #5a3e2b; margin-bottom: 4px; }
+  .memo-item .body { font-size: 13px; color: #3a2e26; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .memo-item .more-btn { font-size: 11px; color: #6b4423; cursor: pointer; font-weight: 600; margin-left: 4px; }
+  .memo-item .more-btn:hover { text-decoration: underline; }
+  .restore-btn { background: #f5e8d8; color: #5a3e2b; border: 1.5px solid #e0c896; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%; margin-bottom: 10px; transition: all 0.15s; }
+  .restore-btn:hover { background: #ecd9ba; }
+  @media (max-width: 600px) {
+    .stat-row { flex-wrap: wrap; }
+    .stat { min-width: 45%; }
+    .hcell { min-height: 48px; padding: 4px 2px; }
+    .hcell .num { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>투썸 대평 펜트빌점 근무 관리</h1>
+  <p class="sub">스텝은 근무 가능 시간을 입력하고, 관리자는 한눈에 파악합니다.</p>
+
+  <div id="configBanner" class="config-banner hide">
+    ⚠️ <b>설정 필요:</b> HTML 파일을 열어서 <code>API_URL</code> 값을 본인의 Apps Script 웹 앱 URL로 바꿔주세요.
+  </div>
+
+  <div class="sync-bar">
+    <span class="sync-dot" id="syncDot"></span>
+    <span id="syncText">연결 확인 중...</span>
+    <button class="btn-ghost btn-sm" style="margin-left:auto;" onclick="loadAll(true)">🔄 새로고침</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="employee" onclick="switchTab('employee')">스텝 입력</button>
+    <button class="tab" data-tab="manager" onclick="switchTab('manager')">관리자 대시보드</button>
+  </div>
+
+  <!-- ============ EMPLOYEE TAB ============ -->
+  <div id="tab-employee">
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>이름 선택</label>
+          <select id="empName">
+            <option value="">— 본인 이름을 선택하세요 —</option>
+          </select>
+        </div>
+        <div>
+          <label>대상 주차</label>
+          <input type="text" id="empWeek" readonly style="background:#f0e9dc;">
+        </div>
+      </div>
+      <p class="sub" style="margin: 4px 0 14px;">명단에 본인 이름이 없다면 관리자에게 등록을 요청하세요.</p>
+
+      <button id="restoreBtn" class="restore-btn hide" onclick="restoreLastSubmission()">📋 지난 제출 불러오기</button>
+
+      <label>가능한 시간 클릭</label>
+      <table class="grid">
+        <thead>
+          <tr>
+            <th class="shift"></th>
+            <th>월</th><th>화</th><th>수</th><th>목</th><th>금</th>
+            <th style="color:#c44;">토</th><th style="color:#c44;">일</th>
+          </tr>
+        </thead>
+        <tbody id="grid"></tbody>
+      </table>
+
+      <div style="display:flex; gap:6px; margin-top:12px;">
+        <button class="btn-ghost btn-sm" onclick="selectAll()">전체 가능</button>
+        <button class="btn-ghost btn-sm" onclick="clearAll()">전체 해제</button>
+        <button class="btn-ghost btn-sm" onclick="weekdayOnly()">평일만</button>
+      </div>
+
+      <div style="margin-top:16px;">
+        <label>💬 점장님께 메모 (선택)</label>
+        <textarea id="empMemo" maxlength="200"></textarea>
+        <div class="memo-counter" id="memoCounter">0 / 200</div>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-top:14px;">
+        <button class="btn-primary" id="submitBtn" style="flex:1;" onclick="submit()">✓ 제출하기</button>
+      </div>
+      <p id="empPrev" class="sub" style="margin-top:10px; text-align:center;"></p>
+    </div>
+  </div>
+
+  <!-- ============ MANAGER TAB ============ -->
+  <div id="tab-manager" class="hide">
+    <div class="card">
+      <div class="card-title">📅 주차 설정 <span class="muted" id="weekLabel"></span></div>
+      <div class="row">
+        <div>
+          <label>다음 근무 주 시작일 (월요일)</label>
+          <input type="date" id="weekStart" onchange="onWeekChange()">
+        </div>
+        <div style="flex:0 0 auto; display:flex; align-items:flex-end;">
+          <button class="btn-secondary" onclick="resetWeek()">새 주차로</button>
+        </div>
+      </div>
+      <div class="stat-row" style="margin-top: 14px;">
+        <div class="stat good"><div class="n" id="stDone">0</div><div class="l">제출 완료</div></div>
+        <div class="stat warn"><div class="n" id="stPend">0</div><div class="l">미제출</div></div>
+        <div class="stat"><div class="n" id="stTotal">0</div><div class="l">전체 인원</div></div>
+        <div class="stat"><div class="n" id="stRate">0%</div><div class="l">제출률</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">👥 직원 명부 <span class="muted">시트와 자동 동기화</span></div>
+      <div class="row">
+        <div style="flex:3;"><input type="text" id="newName" placeholder="새 직원 이름" onkeydown="if(event.key==='Enter')addStaff()"></div>
+        <div style="flex:0 0 auto;"><button class="btn-primary" onclick="addStaff()">+ 추가</button></div>
+      </div>
+      <div class="roster-list" id="rosterList"></div>
+    </div>
+
+    <div class="card" id="reminderCard">
+      <div class="card-title">⏰ 미제출자 리마인더 <span class="muted" id="pendCnt"></span></div>
+      <div id="pendBox"></div>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <button class="btn-secondary" onclick="copyReminder()">📋 단톡용 메시지 복사</button>
+      </div>
+      <details style="margin-top:10px;">
+        <summary style="cursor:pointer; font-size:12px; color:#7a6b5e;">미리보기</summary>
+        <pre class="box" id="reminderPrev" style="margin-top:8px;"></pre>
+      </details>
+    </div>
+
+    <div class="card hide" id="memoCard">
+      <div class="card-title">💬 스텝 메모 <span class="muted" id="memoCnt"></span></div>
+      <div id="memoBox"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔥 통합 가용성 (셀 클릭 시 가능 인원 표시)</div>
+      <table class="heat">
+        <thead>
+          <tr>
+            <th></th>
+            <th>월</th><th>화</th><th>수</th><th>목</th><th>금</th>
+            <th style="color:#c44;">토</th><th style="color:#c44;">일</th>
+          </tr>
+        </thead>
+        <tbody id="heatBody"></tbody>
+      </table>
+      <div style="display:flex; gap:14px; font-size:11px; color:#7a6b5e; margin-top:10px; flex-wrap:wrap; align-items:center;">
+        <span>인원수:</span>
+        <span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h0" style="width:20px; min-height:14px; padding:0;"></span>0명</span>
+        <span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h1" style="width:20px; min-height:14px; padding:0;"></span>1</span>
+        <span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h2" style="width:20px; min-height:14px; padding:0;"></span>2</span>
+        <span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h3" style="width:20px; min-height:14px; padding:0;"></span>3</span>
+        <span style="display:inline-flex; align-items:center; gap:5px;"><span class="hcell h4" style="width:20px; min-height:14px; padding:0;"></span>4+</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📊 데이터 관리</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn-ghost btn-sm" onclick="exportCSV()">📥 CSV 내보내기</button>
+        <button class="btn-ghost btn-sm" onclick="exportText()">📋 전체 요약 복사</button>
+        <button class="btn-danger btn-sm" onclick="clearWeekSubs()">이번 주 제출 전체 삭제</button>
+      </div>
+      <p class="sub" style="margin-top:8px;">시트의 raw 데이터는 구글 시트에서 직접 확인/편집 가능합니다.</p>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal" onclick="if(event.target.id==='modal')closeModal()">
+  <div class="modal">
+    <h3 id="mTitle">상세</h3>
+    <div class="meta" id="mMeta"></div>
+    <div style="margin-bottom:14px;">
+      <div style="font-size:12px; font-weight:600; color:#2d6a3e; margin-bottom:6px;">✓ 가능한 직원</div>
+      <div class="name-list" id="mAvail"></div>
+    </div>
+    <div>
+      <div style="font-size:12px; font-weight:600; color:#a05818; margin-bottom:6px;">✗ 불가 / 미제출</div>
+      <div class="name-list" id="mUnav"></div>
+    </div>
+    <div style="margin-top:16px; text-align:right;">
+      <button class="btn-secondary btn-sm" onclick="closeModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// ⚠️ 설정: 아래 API_URL을 본인의 Apps Script 웹 앱 URL로 변경
+// ============================================================
+const API_URL = 'https://script.google.com/macros/s/AKfycbykLAd7KyBG18QTrtLgUJtpT44QP3UonfuY2PJjvpk5WAZJGO0Muj8_8gkz3ETQ6YdXRw/exec';
+const POLL_INTERVAL = 5000;
+
+const DAYS = ['월','화','수','목','금','토','일'];
+const SHIFTS = [
+  { key: 'open',   label: '오픈',   time: '08:00-13:00' },
+  { key: 'middle', label: '미들',   time: '13:00-18:00' },
+  { key: 'close',  label: '마감',   time: '18:00-22:30' },
+];
+
+let cache = { roster: [], submissions: [] };
+let week = '';
+let empState = {};
+SHIFTS.forEach(s => empState[s.key] = Array(7).fill(false));
+
+// ---------- API ----------
+async function apiGet() {
+  const res = await fetch(API_URL, { method: 'GET' });
+  return await res.json();
+}
+
+async function apiPost(action, payload) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action, ...payload })
+  });
+  return await res.json();
+}
+
+// ---------- sync ----------
+let pollTimer = null;
+function setSyncStatus(state, text) {
+  const dot = document.getElementById('syncDot');
+  dot.className = 'sync-dot' + (state === 'err' ? ' err' : state === 'loading' ? ' loading' : '');
+  document.getElementById('syncText').textContent = text;
+}
+
+async function loadAll(showToast) {
+  if (API_URL === 'PASTE_YOUR_WEB_APP_URL_HERE') {
+    document.getElementById('configBanner').classList.remove('hide');
+    setSyncStatus('err', '설정 필요');
+    return;
+  }
+  setSyncStatus('loading', '동기화 중...');
+  try {
+    const data = await apiGet();
+    if (!data.ok) throw new Error(data.error || 'unknown');
+    cache.roster = data.roster || [];
+    cache.submissions = data.submissions || [];
+    setSyncStatus('ok', `시트 연결됨 · ${new Date().toLocaleTimeString()}`);
+    renderEmployee();
+    renderManager();
+    if (showToast) toast('동기화 완료 ✓');
+  } catch (err) {
+    setSyncStatus('err', '연결 실패');
+    if (showToast) toast('연결 실패: ' + err.message, true);
+    console.error(err);
+  }
+}
+
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(() => loadAll(false), POLL_INTERVAL);
+}
+
+// ---------- helpers ----------
+function getSubMap() {
+  const m = {};
+  cache.submissions.filter(s => s.week_start === week).forEach(s => { m[s.name] = s; });
+  return m;
+}
+
+function strToDays(str) {
+  if (!str) return Array(7).fill(false);
+  const arr = Array(7).fill(false);
+  str.split(/[\s,]+/).filter(Boolean).forEach(d => {
+    const i = DAYS.indexOf(d);
+    if (i >= 0) arr[i] = true;
+  });
+  return arr;
+}
+
+function daysToStr(arr) {
+  return arr.map((v,i) => v ? DAYS[i] : null).filter(Boolean).join(' ');
+}
+
+// 가장 최근 제출 찾기 (현재 주 제외)
+function findLastSubmission(name) {
+  const subs = cache.submissions
+    .filter(s => s.name === name && s.week_start !== week)
+    .sort((a, b) => (b.submitted_at || '').localeCompare(a.submitted_at || ''));
+  return subs[0] || null;
+}
+
+// ---------- employee grid ----------
+function buildGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  SHIFTS.forEach(s => {
+    const tr = document.createElement('tr');
+    const th = document.createElement('th');
+    th.className = 'shift';
+    th.innerHTML = `<div class="shift-label">${s.label}<span class="shift-time">${s.time}</span></div>`;
+    tr.appendChild(th);
+    for (let d = 0; d < 7; d++) {
+      const td = document.createElement('td');
+      const btn = document.createElement('div');
+      btn.className = 'cell';
+      btn.textContent = '○';
+      btn.onclick = () => toggle(s.key, d, btn);
+      td.appendChild(btn);
+      tr.appendChild(td);
+    }
+    grid.appendChild(tr);
+  });
+}
+
+function toggle(shift, day, el) {
+  empState[shift][day] = !empState[shift][day];
+  el.classList.toggle('selected', empState[shift][day]);
+  el.textContent = empState[shift][day] ? '✓' : '○';
+  updateEmpPrev();
+}
+
+function refreshCells() {
+  const cells = document.querySelectorAll('#grid .cell');
+  let i = 0;
+  SHIFTS.forEach(s => {
+    for (let d = 0; d < 7; d++) {
+      const c = cells[i++];
+      c.classList.toggle('selected', empState[s.key][d]);
+      c.textContent = empState[s.key][d] ? '✓' : '○';
+    }
+  });
+}
+
+function selectAll() { SHIFTS.forEach(s => empState[s.key] = Array(7).fill(true)); refreshCells(); updateEmpPrev(); }
+function clearAll() { SHIFTS.forEach(s => empState[s.key] = Array(7).fill(false)); refreshCells(); updateEmpPrev(); }
+function weekdayOnly() { SHIFTS.forEach(s => empState[s.key] = [true,true,true,true,true,false,false]); refreshCells(); updateEmpPrev(); }
+
+function updateEmpPrev() {
+  const total = SHIFTS.reduce((a,s) => a + empState[s.key].filter(Boolean).length, 0);
+  document.getElementById('empPrev').textContent = total ? `${total}타임 선택됨` : '시간을 1개 이상 선택해주세요';
+}
+
+function loadEmpForName(name) {
+  SHIFTS.forEach(s => empState[s.key] = Array(7).fill(false));
+  const memoEl = document.getElementById('empMemo');
+  memoEl.value = '';
+  const m = getSubMap();
+  if (name && m[name]) {
+    empState.open   = strToDays(m[name].open);
+    empState.middle = strToDays(m[name].middle);
+    empState.close  = strToDays(m[name].close);
+    memoEl.value = m[name].memo || '';
+  }
+  refreshCells();
+  updateEmpPrev();
+  updateMemoCounter();
+  updateRestoreButton(name);
+}
+
+function updateRestoreButton(name) {
+  const btn = document.getElementById('restoreBtn');
+  if (!name) { btn.classList.add('hide'); return; }
+  const m = getSubMap();
+  // 현재 주에 이미 제출했으면 숨김
+  if (m[name]) { btn.classList.add('hide'); return; }
+  // 과거 제출 찾기
+  const last = findLastSubmission(name);
+  if (!last) { btn.classList.add('hide'); return; }
+  btn.classList.remove('hide');
+  btn.textContent = `📋 지난 제출 불러오기 (${fmtWeekRange(last.week_start)} 주)`;
+}
+
+function restoreLastSubmission() {
+  const name = document.getElementById('empName').value;
+  if (!name) return;
+  const last = findLastSubmission(name);
+  if (!last) { toast('불러올 지난 제출이 없습니다', true); return; }
+  empState.open   = strToDays(last.open);
+  empState.middle = strToDays(last.middle);
+  empState.close  = strToDays(last.close);
+  refreshCells();
+  updateEmpPrev();
+  toast(`${fmtWeekRange(last.week_start)} 주 데이터를 불러왔습니다 ✓`);
+}
+
+function updateMemoCounter() {
+  const el = document.getElementById('empMemo');
+  const counter = document.getElementById('memoCounter');
+  const len = el.value.length;
+  counter.textContent = `${len} / 200`;
+  counter.classList.toggle('warn', len >= 180);
+}
+
+function renderEmployee() {
+  const sel = document.getElementById('empName');
+  const cur = sel.value;
+  const m = getSubMap();
+  sel.innerHTML = '<option value="">— 본인 이름을 선택하세요 —</option>' +
+    cache.roster.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}${m[n] ? ' ✓ 제출됨' : ''}</option>`).join('');
+  if (cache.roster.includes(cur)) sel.value = cur;
+  document.getElementById('empWeek').value = `${week} (${fmtWeekRange(week)})`;
+  // 이름이 선택돼있으면 복원 버튼 상태도 갱신
+  if (sel.value) updateRestoreButton(sel.value);
+}
+
+async function submit() {
+  const name = document.getElementById('empName').value;
+  if (!name) { toast('이름을 선택해주세요', true); return; }
+  const total = SHIFTS.reduce((a,s) => a + empState[s.key].filter(Boolean).length, 0);
+  if (total === 0) { toast('가능한 시간을 1개 이상 선택해주세요', true); return; }
+
+  const memo = document.getElementById('empMemo').value.trim();
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = '제출 중...';
+  try {
+    const res = await apiPost('submit', {
+      week_start: week,
+      name,
+      open: daysToStr(empState.open),
+      middle: daysToStr(empState.middle),
+      close: daysToStr(empState.close),
+      total,
+      memo
+    });
+    if (!res.ok) throw new Error(res.error);
+    toast(`${name}님 제출 완료 ✓`);
+    await loadAll(false);
+  } catch (err) {
+    toast('제출 실패: ' + err.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '✓ 제출하기';
+  }
+}
+
+// ---------- manager ----------
+async function addStaff() {
+  const inp = document.getElementById('newName');
+  const name = inp.value.trim();
+  if (!name) return;
+  const res = await apiPost('addStaff', { name });
+  if (res.ok) { inp.value = ''; toast('추가됨 ✓'); await loadAll(false); }
+  else toast(res.error === 'already exists' ? '이미 등록된 이름입니다' : '실패: ' + res.error, true);
+}
+
+async function removeStaff(name) {
+  if (!confirm(`${name}을(를) 명부에서 삭제할까요?\n(시트의 roster 탭에서 해당 행이 삭제됩니다)`)) return;
+  const res = await apiPost('removeStaff', { name });
+  if (res.ok) { toast('삭제됨'); await loadAll(false); }
+  else toast('실패: ' + res.error, true);
+}
+
+async function clearWeekSubs() {
+  if (!confirm(`${week} 주의 모든 제출 내역을 삭제할까요?\n(시트의 submissions 탭에서 해당 주 행이 모두 삭제됩니다)`)) return;
+  const res = await apiPost('clearWeek', { week_start: week });
+  if (res.ok) { toast(`${res.deleted}건 삭제됨`); await loadAll(false); }
+  else toast('실패: ' + res.error, true);
+}
+
+function nextMondayISO() {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = (8 - (day === 0 ? 7 : day)) % 7 || 7;
+  const next = new Date(now);
+  next.setDate(now.getDate() + diff);
+  return next.toISOString().slice(0, 10);
+}
+
+function fmtWeekRange(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + 'T00:00:00');
+  const end = new Date(d); end.setDate(d.getDate() + 6);
+  const f = x => `${x.getMonth()+1}/${x.getDate()}`;
+  return `${f(d)} ~ ${f(end)}`;
+}
+
+function onWeekChange() {
+  const v = document.getElementById('weekStart').value;
+  if (!v) return;
+  week = v;
+  localStorage.setItem('cs_week', week);
+  renderEmployee();
+  renderManager();
+}
+
+function resetWeek() {
+  if (!confirm('새 주차로 변경할까요? (이전 데이터는 시트에 그대로 보관됩니다)')) return;
+  week = nextMondayISO();
+  localStorage.setItem('cs_week', week);
+  document.getElementById('weekStart').value = week;
+  renderEmployee();
+  renderManager();
+}
+
+function renderManager() {
+  document.getElementById('weekLabel').textContent = week ? fmtWeekRange(week) : '';
+
+  const m = getSubMap();
+  const done = cache.roster.filter(n => m[n]).length;
+  const pend = cache.roster.length - done;
+  document.getElementById('stDone').textContent = done;
+  document.getElementById('stPend').textContent = pend;
+  document.getElementById('stTotal').textContent = cache.roster.length;
+  document.getElementById('stRate').textContent = cache.roster.length ? Math.round(done/cache.roster.length*100) + '%' : '0%';
+
+  const rl = document.getElementById('rosterList');
+  if (!cache.roster.length) {
+    rl.innerHTML = '<div class="empty" style="width:100%;">시트에 직원을 추가해주세요.</div>';
+  } else {
+    rl.innerHTML = cache.roster.map(n => {
+      const cls = m[n] ? 'done' : 'pending';
+      const icon = m[n] ? '✓' : '⏳';
+      const cnt = m[n] ? ` (${m[n].total})` : '';
+      const memoIcon = m[n] && m[n].memo ? ' 💬' : '';
+      return `<span class="pill ${cls}"><span>${icon}</span><span>${escapeHtml(n)}${cnt}${memoIcon}</span><span class="x" onclick="event.stopPropagation();removeStaff('${escapeAttr(n)}')">×</span></span>`;
+    }).join('');
+  }
+
+  const pending = cache.roster.filter(n => !m[n]);
+  document.getElementById('pendCnt').textContent = pending.length ? `${pending.length}명` : '';
+  const pb = document.getElementById('pendBox');
+  if (!cache.roster.length) pb.innerHTML = '<div class="empty">직원 명부를 먼저 등록해주세요.</div>';
+  else if (!pending.length) pb.innerHTML = '<div class="empty" style="color:#2d6a3e;">🎉 모두 제출 완료했습니다!</div>';
+  else pb.innerHTML = '<div class="name-list">' + pending.map(n => `<span class="name-tag">${escapeHtml(n)}</span>`).join('') + '</div>';
+  document.getElementById('reminderPrev').textContent = buildReminderText();
+
+  renderMemoCard();
+  renderHeatmap();
+}
+
+function renderMemoCard() {
+  const m = getSubMap();
+  const card = document.getElementById('memoCard');
+  const box = document.getElementById('memoBox');
+  const cnt = document.getElementById('memoCnt');
+
+  // 메모가 있는 알바생만 추출
+  const withMemo = cache.roster
+    .map(n => ({ name: n, sub: m[n] }))
+    .filter(x => x.sub && x.sub.memo && x.sub.memo.trim());
+
+  if (!withMemo.length) {
+    card.classList.add('hide');
+    return;
+  }
+
+  card.classList.remove('hide');
+  cnt.textContent = `${withMemo.length}명`;
+
+  box.innerHTML = withMemo.map(x => {
+    const memo = x.sub.memo;
+    const isLong = memo.length > 60;
+    const preview = isLong ? memo.slice(0, 60) + '...' : memo;
+    const id = `memo_${Math.random().toString(36).slice(2,8)}`;
+    return `
+      <div class="memo-item">
+        <div class="name">${escapeHtml(x.name)}</div>
+        <div class="body" id="${id}_body" data-full="${escapeAttr(memo)}" data-preview="${escapeAttr(preview)}" data-expanded="false">${escapeHtml(preview)}${isLong ? `<span class="more-btn" onclick="toggleMemo('${id}')">더보기</span>` : ''}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleMemo(id) {
+  const el = document.getElementById(id + '_body');
+  if (!el) return;
+  const expanded = el.dataset.expanded === 'true';
+  if (expanded) {
+    el.innerHTML = escapeHtml(el.dataset.preview) + `<span class="more-btn" onclick="toggleMemo('${id}')">더보기</span>`;
+    el.dataset.expanded = 'false';
+  } else {
+    el.innerHTML = escapeHtml(el.dataset.full) + ` <span class="more-btn" onclick="toggleMemo('${id}')">접기</span>`;
+    el.dataset.expanded = 'true';
+  }
+}
+
+function renderHeatmap() {
+  const m = getSubMap();
+  const tb = document.getElementById('heatBody');
+  tb.innerHTML = '';
+  SHIFTS.forEach(s => {
+    const tr = document.createElement('tr');
+    const th = document.createElement('th');
+    th.className = 'shift';
+    th.style.textAlign = 'left';
+    th.innerHTML = `<div class="shift-label">${s.label}<span class="shift-time">${s.time}</span></div>`;
+    tr.appendChild(th);
+    for (let d = 0; d < 7; d++) {
+      const td = document.createElement('td');
+      const avail = cache.roster.filter(n => m[n] && strToDays(m[n][s.key])[d]);
+      const n = avail.length;
+      const cls = n === 0 ? 'h0' : n === 1 ? 'h1' : n === 2 ? 'h2' : n === 3 ? 'h3' : 'h4';
+      const div = document.createElement('div');
+      div.className = `hcell ${cls}`;
+      div.innerHTML = `<div class="num">${n}</div><div class="lbl">${n ? '명' : '-'}</div>`;
+      div.onclick = () => openCell(s, d);
+      td.appendChild(div);
+      tr.appendChild(td);
+    }
+    tb.appendChild(tr);
+  });
+}
+
+function openCell(shift, day) {
+  const m = getSubMap();
+  const avail = [], unav = [];
+  cache.roster.forEach(n => {
+    if (m[n] && strToDays(m[n][shift.key])[day]) {
+      avail.push({ name: n, hasMemo: !!(m[n].memo && m[n].memo.trim()) });
+    } else {
+      unav.push(n + (m[n] ? '' : ' (미제출)'));
+    }
+  });
+  document.getElementById('mTitle').textContent = `${DAYS[day]}요일 · ${shift.label}`;
+  document.getElementById('mMeta').textContent = `${shift.time} · 가능 ${avail.length}명 / 전체 ${cache.roster.length}명`;
+  document.getElementById('mAvail').innerHTML = avail.length ? avail.map(x => `<span class="name-tag" style="background:#d8efdd; color:#2d6a3e;">${escapeHtml(x.name)}${x.hasMemo ? '<span class="memo-icon">💬</span>' : ''}</span>`).join('') : '<span class="sub">없음</span>';
+  document.getElementById('mUnav').innerHTML = unav.length ? unav.map(n => `<span class="name-tag" style="background:#fde6cf; color:#a05818;">${escapeHtml(n)}</span>`).join('') : '<span class="sub">없음</span>';
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+function buildReminderText() {
+  const m = getSubMap();
+  const pending = cache.roster.filter(n => !m[n]);
+  if (!pending.length) return '';
+  return `📢 [근무표] ${week} (${fmtWeekRange(week)}) 주 가능 시간 미제출자\n` +
+         pending.map(n => `· ${n}`).join('\n') +
+         `\n\n오늘 중으로 입력해주세요`;
+}
+
+function copyReminder() {
+  const txt = buildReminderText();
+  if (!txt) { toast('미제출자가 없습니다'); return; }
+  navigator.clipboard.writeText(txt).then(() => toast('복사되었습니다 ✓'));
+}
+
+function exportCSV() {
+  const m = getSubMap();
+  if (!cache.roster.length) { toast('내보낼 데이터가 없습니다', true); return; }
+  let rows = [['이름','상태','오픈','미들','마감','총타임','제출시각','메모']];
+  cache.roster.forEach(n => {
+    if (m[n]) rows.push([n, '제출', m[n].open, m[n].middle, m[n].close, m[n].total, m[n].submitted_at, m[n].memo || '']);
+    else rows.push([n, '미제출', '', '', '', 0, '', '']);
+  });
+  const csv = '\uFEFF' + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `근무표_${week}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV 다운로드 ✓');
+}
+
+function exportText() {
+  const m = getSubMap();
+  let txt = `📋 근무표 요약 — ${week} (${fmtWeekRange(week)})\n${'─'.repeat(35)}\n`;
+  cache.roster.forEach(n => {
+    if (m[n]) {
+      txt += `\n[${n}] (${m[n].total}타임)\n`;
+      SHIFTS.forEach(s => { txt += `  ${s.label}: ${m[n][s.key] || '-'}\n`; });
+      if (m[n].memo && m[n].memo.trim()) {
+        txt += `  💬 ${m[n].memo}\n`;
+      }
+    } else {
+      txt += `\n[${n}] ⏳ 미제출\n`;
+    }
+  });
+  navigator.clipboard.writeText(txt).then(() => toast('전체 요약 복사됨 ✓'));
+}
+
+function switchTab(t) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  document.getElementById('tab-employee').classList.toggle('hide', t !== 'employee');
+  document.getElementById('tab-manager').classList.toggle('hide', t !== 'manager');
+}
+
+function toast(m, isErr) {
+  const t = document.getElementById('toast');
+  t.textContent = m;
+  t.className = 'toast show' + (isErr ? ' err' : '');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeAttr(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+(function init() {
+  week = localStorage.getItem('cs_week') || nextMondayISO();
+  document.getElementById('weekStart').value = week;
+  buildGrid();
+  document.getElementById('empName').addEventListener('change', e => loadEmpForName(e.target.value));
+  document.getElementById('empMemo').addEventListener('input', updateMemoCounter);
+  loadAll(false).then(() => startPolling());
+  updateEmpPrev();
+  updateMemoCounter();
+})();
+</script>
+</body>
+</html>
