@@ -105,6 +105,16 @@
   .memo-item .more-btn:hover { text-decoration: underline; }
   .restore-btn { background: #f5e8d8; color: #5a3e2b; border: 1.5px solid #e0c896; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%; margin-bottom: 10px; transition: all 0.15s; }
   .restore-btn:hover { background: #ecd9ba; }
+  /* 제출 완료 알림 카드 */
+  .submitted-card { background: #e8f4ea; border: 1.5px solid #b8d8c0; border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+  .submitted-card .check { font-size: 20px; color: #2d6a3e; }
+  .submitted-card .text { flex: 1; font-size: 13px; color: #2d6a3e; }
+  .submitted-card .text strong { font-weight: 700; }
+  .submitted-card .when { font-size: 11px; color: #5a8a68; margin-top: 2px; display: block; }
+  /* 마감 카운트다운 */
+  .deadline-info { font-size: 11px; padding: 4px 9px; border-radius: 6px; background: #fafaf7; color: #7a6b5e; border: 1px solid #e8dfd1; white-space: nowrap; }
+  .deadline-info.warn { background: #fef0e0; color: #a05818; border-color: #f5c896; }
+  .deadline-info.over { background: #fafaf7; color: #9a8a7a; border-color: #e8dfd1; font-style: italic; }
   @media (max-width: 600px) {
     .stat-row { flex-wrap: wrap; }
     .stat { min-width: 45%; }
@@ -125,7 +135,8 @@
   <div class="sync-bar">
     <span class="sync-dot" id="syncDot"></span>
     <span id="syncText">연결 확인 중...</span>
-    <button class="btn-ghost btn-sm" style="margin-left:auto;" onclick="loadAll(true)">🔄 새로고침</button>
+    <span id="deadlineInfo" class="deadline-info hide" style="margin-left:auto;"></span>
+    <button class="btn-ghost btn-sm" style="margin-left:8px;" onclick="loadAll(true)">🔄 새로고침</button>
   </div>
 
   <div class="tabs">
@@ -135,6 +146,13 @@
 
   <!-- ============ EMPLOYEE TAB ============ -->
   <div id="tab-employee">
+    <div id="submittedCard" class="submitted-card hide">
+      <span class="check">✓</span>
+      <div class="text">
+        <strong id="submittedName"></strong>님, 이번 주 제출 완료되었어요.
+        <span class="when" id="submittedWhen"></span>
+      </div>
+    </div>
     <div class="card">
       <div class="row">
         <div>
@@ -291,6 +309,22 @@
 const API_URL = 'https://script.google.com/macros/s/AKfycbykLAd7KyBG18QTrtLgUJtpT44QP3UonfuY2PJjvpk5WAZJGO0Muj8_8gkz3ETQ6YdXRw/exec';
 const POLL_INTERVAL = 5000;
 
+// ============================================================
+// ⏰ 마감일 설정 (점장이 직접 코드를 수정하여 변경)
+// ============================================================
+// daysBefore: 근무 시작일(월요일) 며칠 전이 마감인지
+//   예) daysBefore: 1 → 전주 일요일이 마감
+//   예) daysBefore: 2 → 전주 토요일이 마감
+//   예) daysBefore: 3 → 전주 금요일이 마감
+// hour, minute: 마감 시각 (24시간제)
+// enabled: false로 두면 카운트다운 표시 안 함
+const DEADLINE = {
+  enabled: true,
+  daysBefore: 1,    // 전주 일요일 마감
+  hour: 23,
+  minute: 59
+};
+
 const DAYS = ['월','화','수','목','금','토','일'];
 const SHIFTS = [
   { key: 'open',   label: '오픈',   time: '08:00-13:00' },
@@ -302,6 +336,10 @@ let cache = { roster: [], submissions: [] };
 let week = '';
 let empState = {};
 SHIFTS.forEach(s => empState[s.key] = Array(7).fill(false));
+
+// 새 제출 감지용
+let lastSubmissionKeys = new Set();
+let isFirstLoad = true;
 
 // ---------- API ----------
 async function apiGet() {
@@ -338,14 +376,49 @@ async function loadAll(showToast) {
     cache.roster = data.roster || [];
     cache.submissions = data.submissions || [];
     setSyncStatus('ok', `시트 연결됨 · ${new Date().toLocaleTimeString()}`);
+    detectNewSubmissions();  // 새 제출 알림 (관리자 인증된 상태일 때만)
     renderEmployee();
     renderManager();
+    updateTabTitle();
     if (showToast) toast('동기화 완료 ✓');
   } catch (err) {
     setSyncStatus('err', '연결 실패');
     if (showToast) toast('연결 실패: ' + err.message, true);
     console.error(err);
   }
+}
+
+// 새 제출 감지 → 관리자 인증된 상태일 때만 토스트로 알림
+function detectNewSubmissions() {
+  const currentKeys = new Set(
+    cache.submissions
+      .filter(s => s.week_start === week)
+      .map(s => `${s.name}::${s.submitted_at}`)
+  );
+  if (!isFirstLoad && isAdminAuthenticated) {
+    // 이전에 없던 키 찾기
+    const newOnes = [...currentKeys].filter(k => !lastSubmissionKeys.has(k));
+    if (newOnes.length > 0) {
+      const names = newOnes.map(k => k.split('::')[0]);
+      // 이름 중복 제거 (같은 사람 여러 번 수정한 경우)
+      const unique = [...new Set(names)];
+      toast(`📥 ${unique.join(', ')} 제출/수정 ✓`);
+    }
+  }
+  lastSubmissionKeys = currentKeys;
+  isFirstLoad = false;
+}
+
+// 탭 제목에 미제출 인원 수 표시 (관리자 인증된 상태일 때만)
+function updateTabTitle() {
+  const baseTitle = '투썸 대평점 근무관리';
+  if (!isAdminAuthenticated) {
+    document.title = baseTitle;
+    return;
+  }
+  const m = getSubMap();
+  const pending = cache.roster.filter(n => !m[n]).length;
+  document.title = pending > 0 ? `(${pending}) ${baseTitle}` : `✓ ${baseTitle}`;
 }
 
 function startPolling() {
@@ -380,6 +453,40 @@ function findLastSubmission(name) {
     .filter(s => s.name === name && s.week_start !== week)
     .sort((a, b) => (b.submitted_at || '').localeCompare(a.submitted_at || ''));
   return subs[0] || null;
+}
+
+// 해당 주의 마감 일시 계산 (Date 객체 또는 null)
+function calcDeadline(weekStartISO) {
+  if (!DEADLINE || !DEADLINE.enabled) return null;
+  if (!weekStartISO) return null;
+  const weekStart = new Date(weekStartISO + 'T00:00:00');
+  const deadline = new Date(weekStart);
+  deadline.setDate(weekStart.getDate() - DEADLINE.daysBefore);
+  deadline.setHours(DEADLINE.hour, DEADLINE.minute, 0, 0);
+  return deadline;
+}
+
+// 마감까지 남은 시간을 사람이 읽기 쉬운 문자열로
+function fmtCountdown(deadline) {
+  const now = new Date();
+  const diffMs = deadline - now;
+  if (diffMs <= 0) return { over: true, text: '마감 지남 (그래도 입력 가능)' };
+  const totalMin = Math.floor(diffMs / 60000);
+  const days = Math.floor(totalMin / (60 * 24));
+  const hours = Math.floor((totalMin % (60 * 24)) / 60);
+  const mins = totalMin % 60;
+  if (days >= 1) return { over: false, text: `🕐 마감까지 ${days}일 ${hours}시간`, urgent: false };
+  if (hours >= 1) return { over: false, text: `🕐 마감까지 ${hours}시간 ${mins}분`, urgent: hours < 24 };
+  return { over: false, text: `🕐 마감까지 ${mins}분`, urgent: true };
+}
+
+// 본인 이름 자동 기억 (브라우저별로 따로 저장)
+function getMyName() {
+  return localStorage.getItem('cs_my_name') || '';
+}
+function setMyName(name) {
+  if (name) localStorage.setItem('cs_my_name', name);
+  else localStorage.removeItem('cs_my_name');
 }
 
 // ---------- employee grid ----------
@@ -490,10 +597,71 @@ function renderEmployee() {
   const m = getSubMap();
   sel.innerHTML = '<option value="">— 본인 이름을 선택하세요 —</option>' +
     cache.roster.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}${m[n] ? ' ✓ 제출됨' : ''}</option>`).join('');
-  if (cache.roster.includes(cur)) sel.value = cur;
+
+  // 우선순위: 현재 선택값 > localStorage 저장된 본인 이름
+  if (cache.roster.includes(cur)) {
+    sel.value = cur;
+  } else {
+    const saved = getMyName();
+    if (saved && cache.roster.includes(saved)) {
+      sel.value = saved;
+      // 자동 선택 시 그리드/메모도 채워주기 (사용자가 직접 선택한 것과 동일하게)
+      loadEmpForName(saved);
+    }
+  }
   document.getElementById('empWeek').value = `${week} (${fmtWeekRange(week)})`;
   // 이름이 선택돼있으면 복원 버튼 상태도 갱신
   if (sel.value) updateRestoreButton(sel.value);
+
+  // 제출 완료 카드 + 마감 카운트다운 갱신
+  renderSubmittedCard();
+  updateDeadlineDisplay();
+}
+
+// 제출 완료 카드: 본인이 이번 주 제출한 상태일 때만 표시
+function renderSubmittedCard() {
+  const card = document.getElementById('submittedCard');
+  const myName = getMyName();
+  const m = getSubMap();
+  if (!myName || !m[myName]) {
+    card.classList.add('hide');
+    return;
+  }
+  card.classList.remove('hide');
+  document.getElementById('submittedName').textContent = myName;
+  const at = m[myName].submitted_at;
+  document.getElementById('submittedWhen').textContent = at ? `제출 시각: ${fmtSubmittedAt(at)}` : '';
+}
+
+// ISO 시간 문자열을 한국식으로 (예: "5/8 14:23")
+function fmtSubmittedAt(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+// 마감 카운트다운 표시 (미제출 상태일 때만)
+function updateDeadlineDisplay() {
+  const el = document.getElementById('deadlineInfo');
+  if (!el) return;
+  const myName = getMyName();
+  const m = getSubMap();
+  // 본인이 이미 제출했으면 카운트다운 숨김
+  if (myName && m[myName]) {
+    el.classList.add('hide');
+    return;
+  }
+  const deadline = calcDeadline(week);
+  if (!deadline) {
+    el.classList.add('hide');
+    return;
+  }
+  const c = fmtCountdown(deadline);
+  el.classList.remove('hide');
+  el.classList.toggle('warn', !!c.urgent && !c.over);
+  el.classList.toggle('over', !!c.over);
+  el.textContent = c.text;
 }
 
 async function submit() {
@@ -517,6 +685,7 @@ async function submit() {
       memo
     });
     if (!res.ok) throw new Error(res.error);
+    setMyName(name);  // 본인 이름 자동 기억
     toast(`${name}님 제출 완료 ✓`);
     await loadAll(false);
   } catch (err) {
@@ -746,9 +915,10 @@ function buildReminderText() {
   const m = getSubMap();
   const pending = cache.roster.filter(n => !m[n]);
   if (!pending.length) return '';
+  const link = window.location.origin + window.location.pathname;
   return `📢 [근무표] ${week} (${fmtWeekRange(week)}) 주 가능 시간 미제출자\n` +
          pending.map(n => `· ${n}`).join('\n') +
-         `\n\n오늘 중으로 입력해주세요`;
+         `\n\n오늘 중으로 입력해주세요\n${link}`;
 }
 
 function copyReminder() {
@@ -803,6 +973,7 @@ function switchTab(t) {
     if (input === ADMIN_PASSWORD) {
       isAdminAuthenticated = true;
       toast("관리자 인증 성공 ✓");
+      updateTabTitle();  // 인증 성공 즉시 탭 제목에 미제출 카운트 표시
     } else {
       if (input !== null) toast("비밀번호가 틀렸습니다", true);
       return; // 인증 실패 시 탭 전환을 중단합니다.
@@ -828,11 +999,16 @@ function escapeAttr(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, '&q
   week = localStorage.getItem('cs_week') || nextMondayISO();
   document.getElementById('weekStart').value = week;
   buildGrid();
-  document.getElementById('empName').addEventListener('change', e => loadEmpForName(e.target.value));
+  document.getElementById('empName').addEventListener('change', e => {
+    setMyName(e.target.value);  // 사용자가 직접 이름 바꿀 때도 자동 기억 갱신
+    loadEmpForName(e.target.value);
+  });
   document.getElementById('empMemo').addEventListener('input', updateMemoCounter);
   loadAll(false).then(() => startPolling());
   updateEmpPrev();
   updateMemoCounter();
+  // 마감 카운트다운 1분마다 갱신 (분 단위 정확도면 충분)
+  setInterval(updateDeadlineDisplay, 60000);
 })();
 </script>
 </body>
