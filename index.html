@@ -773,6 +773,10 @@ function exportText() {
   navigator.clipboard.writeText(txt).then(() => toast('전체 요약 복사됨 ✓'));
 }
 
+// 관리자 인증 상태를 저장하는 변수를 상단에 추가합니다.
+let isAdminAuthenticated = false;
+const ADMIN_PASSWORD = "0508"; // 여기에 사용할 비밀번호를 입력하세요.
+
 function switchTab(t) {
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
   document.getElementById('tab-employee').classList.toggle('hide', t !== 'employee');
