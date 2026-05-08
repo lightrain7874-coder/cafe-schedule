@@ -210,9 +210,6 @@
           <label>다음 근무 주 시작일 (월요일)</label>
           <input type="date" id="weekStart" onchange="onWeekChange()">
         </div>
-        <div style="flex:0 0 auto; display:flex; align-items:flex-end;">
-          <button class="btn-secondary" onclick="resetWeek()">새 주차로</button>
-        </div>
       </div>
       <div class="stat-row" style="margin-top: 14px;">
         <div class="stat good"><div class="n" id="stDone">0</div><div class="l">제출 완료</div></div>
@@ -220,6 +217,33 @@
         <div class="stat"><div class="n" id="stTotal">0</div><div class="l">전체 인원</div></div>
         <div class="stat"><div class="n" id="stRate">0%</div><div class="l">제출률</div></div>
       </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⏰ 마감일 설정 <span class="muted">시트에 저장되어 모두에게 적용됩니다</span></div>
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:12px;">
+        <input type="checkbox" id="setDeadlineOn" style="width:auto; cursor:pointer;">
+        <span style="font-weight:600; font-size:13px;">마감 카운트다운 사용</span>
+      </label>
+      <div class="row">
+        <div>
+          <label>마감 요일</label>
+          <select id="setDeadlineDay">
+            <option value="2">화요일</option>
+            <option value="3">수요일</option>
+            <option value="4">목요일</option>
+            <option value="5">금요일</option>
+            <option value="6">토요일</option>
+            <option value="7">일요일</option>
+          </select>
+        </div>
+        <div>
+          <label>마감 시각</label>
+          <input type="time" id="setDeadlineTime" value="23:59">
+        </div>
+      </div>
+      <p class="sub" id="deadlinePreview" style="margin: 4px 0 12px;"></p>
+      <button class="btn-primary" id="saveSettingsBtn" style="width:100%;" onclick="saveSettings()">저장</button>
     </div>
 
     <div class="card">
@@ -309,20 +333,12 @@
 const API_URL = 'https://script.google.com/macros/s/AKfycbykLAd7KyBG18QTrtLgUJtpT44QP3UonfuY2PJjvpk5WAZJGO0Muj8_8gkz3ETQ6YdXRw/exec';
 const POLL_INTERVAL = 5000;
 
-// ============================================================
-// ⏰ 마감일 설정 (점장이 직접 코드를 수정하여 변경)
-// ============================================================
-// daysBefore: 근무 시작일(월요일) 며칠 전이 마감인지
-//   예) daysBefore: 1 → 전주 일요일이 마감
-//   예) daysBefore: 2 → 전주 토요일이 마감
-//   예) daysBefore: 3 → 전주 금요일이 마감
-// hour, minute: 마감 시각 (24시간제)
-// enabled: false로 두면 카운트다운 표시 안 함
-const DEADLINE = {
-  enabled: true,
-  daysBefore: 1,    // 전주 일요일 마감
-  hour: 23,
-  minute: 59
+// 마감일 디폴트 (settings 시트가 없거나 못 받았을 때만 사용)
+const DEFAULT_SETTINGS = {
+  deadline_day: 4,    // 1=월 ~ 7=일 (4=목)
+  deadline_hour: 23,
+  deadline_min: 59,
+  deadline_on: true
 };
 
 const DAYS = ['월','화','수','목','금','토','일'];
@@ -332,7 +348,7 @@ const SHIFTS = [
   { key: 'close',  label: '마감',   time: '18:00-22:30' },
 ];
 
-let cache = { roster: [], submissions: [] };
+let cache = { roster: [], submissions: [], settings: Object.assign({}, DEFAULT_SETTINGS) };
 let week = '';
 let empState = {};
 SHIFTS.forEach(s => empState[s.key] = Array(7).fill(false));
@@ -375,6 +391,7 @@ async function loadAll(showToast) {
     if (!data.ok) throw new Error(data.error || 'unknown');
     cache.roster = data.roster || [];
     cache.submissions = data.submissions || [];
+    if (data.settings) cache.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings);
     setSyncStatus('ok', `시트 연결됨 · ${new Date().toLocaleTimeString()}`);
     detectNewSubmissions();  // 새 제출 알림 (관리자 인증된 상태일 때만)
     renderEmployee();
@@ -456,13 +473,25 @@ function findLastSubmission(name) {
 }
 
 // 해당 주의 마감 일시 계산 (Date 객체 또는 null)
+// 마감 = "근무 주(월~일) 안에서 점장이 지정한 요일/시각" 기준이 아니라
+// "근무 주의 월요일 기준으로 deadline_day가 가리키는 요일"이 되도록 계산.
+// deadline_day: 1=월,2=화,...,7=일
+// 예) deadline_day=4(목) + 다음 주 월요일이 5/12 → 마감은 5/8(목) (전주 목요일)
 function calcDeadline(weekStartISO) {
-  if (!DEADLINE || !DEADLINE.enabled) return null;
+  const s = cache.settings || DEFAULT_SETTINGS;
+  if (!s.deadline_on) return null;
   if (!weekStartISO) return null;
+  const day = Number(s.deadline_day);
+  const hour = Number(s.deadline_hour);
+  const min = Number(s.deadline_min);
+  if (!(day >= 1 && day <= 7)) return null;
+
+  // weekStart는 월요일. 마감 요일이 N(1=월)이면 (N-1)일 후가 마감.
+  // 그런데 마감은 "근무 시작 전"이어야 의미가 있으니, 근무 주의 월요일 기준에서 7일 빼서 "전 주의 같은 요일"을 마감으로 잡음.
   const weekStart = new Date(weekStartISO + 'T00:00:00');
   const deadline = new Date(weekStart);
-  deadline.setDate(weekStart.getDate() - DEADLINE.daysBefore);
-  deadline.setHours(DEADLINE.hour, DEADLINE.minute, 0, 0);
+  deadline.setDate(weekStart.getDate() - 7 + (day - 1));
+  deadline.setHours(hour, min, 0, 0);
   return deadline;
 }
 
@@ -761,15 +790,8 @@ function onWeekChange() {
   localStorage.setItem('cs_week', week);
   renderEmployee();
   renderManager();
-}
-
-function resetWeek() {
-  if (!confirm('새 주차로 변경할까요? (이전 데이터는 시트에 그대로 보관됩니다)')) return;
-  week = nextMondayISO();
-  localStorage.setItem('cs_week', week);
-  document.getElementById('weekStart').value = week;
-  renderEmployee();
-  renderManager();
+  updateDeadlinePreview();
+  updateDeadlineDisplay();
 }
 
 function renderManager() {
@@ -806,6 +828,92 @@ function renderManager() {
 
   renderMemoCard();
   renderHeatmap();
+  renderSettingsCard();
+}
+
+// 마감일 설정 카드를 cache.settings 값으로 채워주기
+// 사용자가 입력 중일 때 덮어쓰지 않도록, "값이 비어있을 때만" 채움 (초기 1회 로드)
+let settingsCardInitialized = false;
+function renderSettingsCard() {
+  const onEl = document.getElementById('setDeadlineOn');
+  const dayEl = document.getElementById('setDeadlineDay');
+  const timeEl = document.getElementById('setDeadlineTime');
+  if (!onEl || !dayEl || !timeEl) return;
+
+  const s = cache.settings || DEFAULT_SETTINGS;
+
+  if (!settingsCardInitialized) {
+    onEl.checked = !!s.deadline_on;
+    dayEl.value = String(s.deadline_day);
+    const hh = String(s.deadline_hour).padStart(2, '0');
+    const mm = String(s.deadline_min).padStart(2, '0');
+    timeEl.value = `${hh}:${mm}`;
+    settingsCardInitialized = true;
+  }
+  updateDeadlinePreview();
+}
+
+// 미리보기 텍스트: "다음 주 (5/11~) 기준 마감 → 5/8(목) 23:59"
+function updateDeadlinePreview() {
+  const el = document.getElementById('deadlinePreview');
+  if (!el) return;
+  const onEl = document.getElementById('setDeadlineOn');
+  const dayEl = document.getElementById('setDeadlineDay');
+  const timeEl = document.getElementById('setDeadlineTime');
+  if (!onEl.checked) {
+    el.textContent = 'ℹ️ 카운트다운이 꺼져있습니다.';
+    el.style.color = '#9a8a7a';
+    return;
+  }
+  const day = Number(dayEl.value);
+  const [hStr, mStr] = (timeEl.value || '23:59').split(':');
+  const hour = Number(hStr), min = Number(mStr);
+  // 임시 settings로 calcDeadline에 넘기기 위해 즉석 계산
+  const weekStart = new Date(week + 'T00:00:00');
+  const dl = new Date(weekStart);
+  dl.setDate(weekStart.getDate() - 7 + (day - 1));
+  dl.setHours(hour, min, 0, 0);
+  const dayLabel = DAYS[day - 1];
+  const hh = String(hour).padStart(2,'0');
+  const mm = String(min).padStart(2,'0');
+  el.textContent = `ℹ️ ${fmtWeekRange(week)} 주 기준 마감: ${dl.getMonth()+1}/${dl.getDate()}(${dayLabel}) ${hh}:${mm}`;
+  el.style.color = '#7a6b5e';
+}
+
+// 마감일 설정 저장
+async function saveSettings() {
+  const onEl = document.getElementById('setDeadlineOn');
+  const dayEl = document.getElementById('setDeadlineDay');
+  const timeEl = document.getElementById('setDeadlineTime');
+  const day = Number(dayEl.value);
+  const [hStr, mStr] = (timeEl.value || '').split(':');
+  const hour = Number(hStr), min = Number(mStr);
+
+  if (!(day >= 2 && day <= 7)) { toast('마감 요일을 선택해주세요', true); return; }
+  if (!(hour >= 0 && hour <= 23) || !(min >= 0 && min <= 59)) {
+    toast('마감 시각을 올바르게 입력해주세요', true); return;
+  }
+
+  const btn = document.getElementById('saveSettingsBtn');
+  btn.disabled = true; btn.textContent = '저장 중...';
+  try {
+    const res = await apiPost('updateSettings', {
+      deadline_day: day,
+      deadline_hour: hour,
+      deadline_min: min,
+      deadline_on: !!onEl.checked
+    });
+    if (!res.ok) throw new Error(res.error);
+    // 즉시 cache 갱신 (다음 polling 전에도 반영되게)
+    cache.settings = { deadline_day: day, deadline_hour: hour, deadline_min: min, deadline_on: !!onEl.checked };
+    updateDeadlineDisplay();
+    toast('마감일 설정 저장 ✓');
+    await loadAll(false);
+  } catch (err) {
+    toast('저장 실패: ' + err.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '저장';
+  }
 }
 
 function renderMemoCard() {
@@ -1004,6 +1112,12 @@ function escapeAttr(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, '&q
     loadEmpForName(e.target.value);
   });
   document.getElementById('empMemo').addEventListener('input', updateMemoCounter);
+
+  // 마감일 설정 입력값이 바뀔 때마다 미리보기 즉시 갱신
+  document.getElementById('setDeadlineOn').addEventListener('change', updateDeadlinePreview);
+  document.getElementById('setDeadlineDay').addEventListener('change', updateDeadlinePreview);
+  document.getElementById('setDeadlineTime').addEventListener('change', updateDeadlinePreview);
+
   loadAll(false).then(() => startPolling());
   updateEmpPrev();
   updateMemoCounter();
