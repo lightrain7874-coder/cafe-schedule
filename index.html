@@ -183,9 +183,14 @@
       </table>
 
       <div style="display:flex; gap:6px; margin-top:12px;">
-        <button class="btn-ghost btn-sm" onclick="selectAll()">전체 가능</button>
-        <button class="btn-ghost btn-sm" onclick="clearAll()">전체 해제</button>
-        <button class="btn-ghost btn-sm" onclick="weekdayOnly()">평일만</button>
+        <button class="btn-ghost btn-sm" style="flex:1;" onclick="selectAll()">전체 가능</button>
+        <button class="btn-ghost btn-sm" style="flex:1;" onclick="clearAll()">전체 해제</button>
+        <button class="btn-ghost btn-sm" style="flex:1;" onclick="weekdayOnly()">평일만</button>
+      </div>
+      <div style="display:flex; gap:6px; margin-top:6px;">
+        <button class="btn-ghost btn-sm" style="flex:1;" onclick="shiftOnly('open')">오픈만</button>
+        <button class="btn-ghost btn-sm" style="flex:1;" onclick="shiftOnly('middle')">미들만</button>
+        <button class="btn-ghost btn-sm" style="flex:1;" onclick="shiftOnly('close')">마감만</button>
       </div>
 
       <div style="margin-top:16px;">
@@ -563,6 +568,18 @@ function refreshCells() {
 function selectAll() { SHIFTS.forEach(s => empState[s.key] = Array(7).fill(true)); refreshCells(); updateEmpPrev(); }
 function clearAll() { SHIFTS.forEach(s => empState[s.key] = Array(7).fill(false)); refreshCells(); updateEmpPrev(); }
 function weekdayOnly() { SHIFTS.forEach(s => empState[s.key] = [true,true,true,true,true,false,false]); refreshCells(); updateEmpPrev(); }
+
+// "오픈만/미들만/마감만" — 그 시간대만 남기고 나머지 끄기.
+// 단, 그 시간대 행이 완전히 비어있으면 7일 전체로 자동 채움(첫 클릭의 자연스러운 동작).
+function shiftOnly(shiftKey) {
+  const isEmpty = empState[shiftKey].every(v => !v);
+  SHIFTS.forEach(s => {
+    if (s.key !== shiftKey) empState[s.key] = Array(7).fill(false);
+  });
+  if (isEmpty) empState[shiftKey] = Array(7).fill(true);
+  refreshCells();
+  updateEmpPrev();
+}
 
 function updateEmpPrev() {
   const total = SHIFTS.reduce((a,s) => a + empState[s.key].filter(Boolean).length, 0);
