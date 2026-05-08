@@ -337,7 +337,7 @@
 // ============================================================
 const API_URL = 'https://script.google.com/macros/s/AKfycbykLAd7KyBG18QTrtLgUJtpT44QP3UonfuY2PJjvpk5WAZJGO0Muj8_8gkz3ETQ6YdXRw/exec';
 const POLL_INTERVAL = 5000;
-
+const SITE_URL = 'https://bit.ly/dpy-schedule';
 // 마감일 디폴트 (settings 시트가 없거나 못 받았을 때만 사용)
 const DEFAULT_SETTINGS = {
   deadline_day: 4,    // 1=월 ~ 7=일 (4=목)
@@ -1040,7 +1040,7 @@ function buildReminderText() {
   const m = getSubMap();
   const pending = cache.roster.filter(n => !m[n]);
   if (!pending.length) return '';
-  const link = window.location.origin + window.location.pathname;
+  const link = 'https://bit.ly/dpy-schedule';
   return `📢 [근무표] ${week} (${fmtWeekRange(week)}) 주 가능 시간 미제출자\n` +
          pending.map(n => `· ${n}`).join('\n') +
          `\n\n오늘 중으로 입력해주세요~\n${link}`;
