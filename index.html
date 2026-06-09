@@ -417,7 +417,7 @@ function detectNewSubmissions() {
       .filter(s => s.week_start === week)
       .map(s => `${s.name}::${s.submitted_at}`)
   );
-  if (!isFirstLoad && isAdminAuthenticated) {
+  if (!isFirstLoad) {
     // 이전에 없던 키 찾기
     const newOnes = [...currentKeys].filter(k => !lastSubmissionKeys.has(k));
     if (newOnes.length > 0) {
@@ -431,13 +431,8 @@ function detectNewSubmissions() {
   isFirstLoad = false;
 }
 
-// 탭 제목에 미제출 인원 수 표시 (관리자 인증된 상태일 때만)
 function updateTabTitle() {
   const baseTitle = '투썸 대평점 근무관리';
-  if (!isAdminAuthenticated) {
-    document.title = baseTitle;
-    return;
-  }
   const m = getSubMap();
   const pending = cache.roster.filter(n => !m[n]).length;
   document.title = pending > 0 ? `(${pending}) ${baseTitle}` : `✓ ${baseTitle}`;
@@ -1087,25 +1082,7 @@ function exportText() {
 }
 
 
-// 관리자 인증 상태를 저장하는 변수를 상단에 추가합니다.
-let isAdminAuthenticated = false;
-const ADMIN_PASSWORD = "0508"; // 여기에 사용할 비밀번호를 입력하세요.
-
 function switchTab(t) {
-  // 관리자 탭으로 이동할 때만 비밀번호를 확인합니다.
-  if (t === 'manager' && !isAdminAuthenticated) {
-    const input = prompt("관리자 비밀번호를 입력해주세요:");
-    if (input === ADMIN_PASSWORD) {
-      isAdminAuthenticated = true;
-      toast("관리자 인증 성공 ✓");
-      updateTabTitle();  // 인증 성공 즉시 탭 제목에 미제출 카운트 표시
-    } else {
-      if (input !== null) toast("비밀번호가 틀렸습니다", true);
-      return; // 인증 실패 시 탭 전환을 중단합니다.
-    }
-  }
-
-  // 기존 탭 전환 로직
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
   document.getElementById('tab-employee').classList.toggle('hide', t !== 'employee');
   document.getElementById('tab-manager').classList.toggle('hide', t !== 'manager');
