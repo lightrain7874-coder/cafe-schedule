@@ -13,10 +13,28 @@
   .tabs { display: flex; gap: 6px; margin-bottom: 16px; background: #ede4d3; padding: 4px; border-radius: 12px; }
   .tab { flex: 1; padding: 11px; border: none; background: transparent; cursor: pointer; border-radius: 9px; font-size: 14px; font-weight: 600; color: #7a6b5e; font-family: inherit; transition: all 0.15s; }
   .tab.active { background: #fff; color: #5a3e2b; box-shadow: 0 1px 4px rgba(90,62,43,0.1); }
-  .subtabs { display: flex; gap: 2px; margin-bottom: 14px; border-bottom: 1.5px solid #e8dfd1; }
-  .subtab { padding: 10px 16px; border: none; background: transparent; cursor: pointer; font-size: 13px; font-weight: 600; color: #9a8a7a; font-family: inherit; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px; transition: all 0.15s; }
+  .subtabs { display: flex; gap: 2px; margin-bottom: 14px; border-bottom: 1.5px solid #e8dfd1; overflow-x: auto; }
+  .subtab { padding: 10px 14px; border: none; background: transparent; cursor: pointer; font-size: 13px; font-weight: 600; color: #9a8a7a; font-family: inherit; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px; transition: all 0.15s; white-space: nowrap; flex-shrink: 0; }
   .subtab.active { color: #6b4423; border-bottom-color: #6b4423; }
   .subtab:hover:not(.active) { color: #7a6b5e; }
+  /* 제보(버그/건의) 버튼 + 모달 + 목록 */
+  .report-fab { position: fixed; right: 16px; bottom: 16px; z-index: 60; background: #6b4423; color: #fff; border: none; border-radius: 24px; padding: 11px 16px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer; box-shadow: 0 3px 12px rgba(90,62,43,0.3); transition: all 0.15s; }
+  .report-fab:hover { background: #5a3618; transform: translateY(-1px); }
+  .report-type-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .report-type { flex: 1; padding: 10px; border: 1.5px solid #e0d6c7; border-radius: 8px; background: #fafaf7; cursor: pointer; font-size: 13px; font-weight: 600; color: #7a6b5e; text-align: center; transition: all 0.15s; }
+  .report-type.active { background: #6b4423; border-color: #6b4423; color: #fff; }
+  .report-item { padding: 12px; border-radius: 10px; background: #fafaf7; border: 1.5px solid #e8dfd1; margin-bottom: 10px; }
+  .report-item:last-child { margin-bottom: 0; }
+  .report-item.resolved { opacity: 0.55; }
+  .report-item .rhead { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; flex-wrap: wrap; }
+  .report-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; }
+  .report-badge.bug { background: #fde6cf; color: #a05818; }
+  .report-badge.idea { background: #e8f4ea; color: #2d6a3e; }
+  .report-item .rname { font-size: 12px; font-weight: 600; color: #5a3e2b; }
+  .report-status { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; background: #e8f4ea; color: #2d6a3e; }
+  .report-item .rtime { font-size: 11px; color: #9a8a7a; margin-left: auto; }
+  .report-item .rbody { font-size: 13px; color: #3a2e26; line-height: 1.5; white-space: pre-wrap; word-break: break-word; margin-bottom: 8px; }
+  .report-item .ractions { display: flex; gap: 6px; }
   .card { background: #fff; border-radius: 14px; padding: 18px; box-shadow: 0 2px 12px rgba(90,62,43,0.06); margin-bottom: 14px; }
   .card-title { font-size: 14px; font-weight: 700; color: #5a3e2b; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
   .card-title .muted { font-size: 11px; color: #9a8a7a; font-weight: 400; }
@@ -232,6 +250,7 @@
       <button class="subtab active" data-subtab="overview" onclick="switchMgrTab('overview')">🔥 현황</button>
       <button class="subtab" data-subtab="staff" onclick="switchMgrTab('staff')">👥 직원</button>
       <button class="subtab" data-subtab="settings" onclick="switchMgrTab('settings')">⚙️ 설정</button>
+      <button class="subtab" data-subtab="reports" onclick="switchMgrTab('reports')">🐞 제보 <span id="reportTabCnt"></span></button>
     </div>
 
     <!-- ===== 현황: 통합 가용성 + 메모 ===== -->
@@ -327,6 +346,14 @@
         <p class="sub" style="margin-top:8px;">시트의 raw 데이터는 구글 시트에서 직접 확인/편집 가능합니다.</p>
       </div>
     </div>
+
+    <!-- ===== 제보: 버그/건의 내역 ===== -->
+    <div id="mgr-reports" class="hide">
+      <div class="card">
+        <div class="card-title">🐞 버그 · 건의 제보 <span class="muted" id="reportCnt"></span></div>
+        <div id="reportBox"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -347,6 +374,30 @@
     </div>
   </div>
 </div>
+
+<!-- 제보 모달 -->
+<div class="modal-bg" id="reportModal" onclick="if(event.target.id==='reportModal')closeReportModal()">
+  <div class="modal">
+    <h3>🐞 버그 · 건의 제보</h3>
+    <div class="meta">발견한 버그나 개선 아이디어를 보내주세요. 점장님께 전달됩니다.</div>
+    <div class="report-type-row">
+      <div class="report-type active" id="rtBug" onclick="setReportType('버그')">🐞 버그</div>
+      <div class="report-type" id="rtIdea" onclick="setReportType('건의')">💡 건의</div>
+    </div>
+    <label>이름 (선택)</label>
+    <input type="text" id="reportName" placeholder="익명으로 보내려면 비워두세요" style="margin-bottom:12px;">
+    <label>내용</label>
+    <textarea id="reportContent" maxlength="500" placeholder="예) 미들 셀이 가끔 안 눌려요 / 사진도 첨부할 수 있으면 좋겠어요"></textarea>
+    <div class="memo-counter" id="reportCounter">0 / 500</div>
+    <div style="display:flex; gap:8px; margin-top:14px; justify-content:flex-end;">
+      <button class="btn-ghost btn-sm" onclick="closeReportModal()">취소</button>
+      <button class="btn-primary btn-sm" id="reportSubmitBtn" onclick="submitReport()">보내기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 제보 플로팅 버튼 -->
+<button class="report-fab" onclick="openReportModal()">🐞 제보</button>
 
 <div class="toast" id="toast"></div>
 
@@ -372,7 +423,7 @@ const SHIFTS = [
   { key: 'close',  label: '마감',   time: '18:00-22:30' },
 ];
 
-let cache = { roster: [], submissions: [], settings: Object.assign({}, DEFAULT_SETTINGS) };
+let cache = { roster: [], submissions: [], settings: Object.assign({}, DEFAULT_SETTINGS), reports: [] };
 let week = '';
 let empState = {};
 SHIFTS.forEach(s => empState[s.key] = Array(7).fill(false));
@@ -415,6 +466,7 @@ async function loadAll(showToast) {
     if (!data.ok) throw new Error(data.error || 'unknown');
     cache.roster = data.roster || [];
     cache.submissions = data.submissions || [];
+    cache.reports = data.reports || [];
     if (data.settings) cache.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings);
     setSyncStatus('ok', `시트 연결됨 · ${new Date().toLocaleTimeString()}`);
     detectNewSubmissions();  // 새 제출 알림 (관리자 인증된 상태일 때만)
@@ -860,6 +912,7 @@ function renderManager() {
   renderMemoCard();
   renderHeatmap();
   renderSettingsCard();
+  renderReports();
 }
 
 // 마감일 설정 카드를 cache.settings 값으로 채워주기
@@ -1101,6 +1154,99 @@ function exportText() {
 }
 
 
+// ---------- 제보 (버그/건의) ----------
+let reportType = '버그';
+
+function openReportModal() {
+  setReportType('버그');
+  document.getElementById('reportName').value = getMyName() || '';
+  document.getElementById('reportContent').value = '';
+  updateReportCounter();
+  document.getElementById('reportModal').classList.add('show');
+}
+function closeReportModal() { document.getElementById('reportModal').classList.remove('show'); }
+function setReportType(t) {
+  reportType = t;
+  document.getElementById('rtBug').classList.toggle('active', t === '버그');
+  document.getElementById('rtIdea').classList.toggle('active', t === '건의');
+}
+function updateReportCounter() {
+  const len = document.getElementById('reportContent').value.length;
+  document.getElementById('reportCounter').textContent = `${len} / 500`;
+}
+async function submitReport() {
+  const content = document.getElementById('reportContent').value.trim();
+  if (!content) { toast('내용을 입력해주세요', true); return; }
+  const name = document.getElementById('reportName').value.trim();
+  const btn = document.getElementById('reportSubmitBtn');
+  btn.disabled = true; btn.textContent = '보내는 중...';
+  try {
+    const res = await apiPost('submitReport', { type: reportType, name, content });
+    if (!res.ok) throw new Error(res.error);
+    toast('제보 감사합니다! 잘 전달됐어요 ✓');
+    closeReportModal();
+    await loadAll(false);
+  } catch (err) {
+    toast('전송 실패: ' + err.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '보내기';
+  }
+}
+
+// 관리자: 제보 목록 렌더 (최신순, 대기 건수 배지)
+function renderReports() {
+  const box = document.getElementById('reportBox');
+  const cnt = document.getElementById('reportCnt');
+  const tabCnt = document.getElementById('reportTabCnt');
+  if (!box) return;
+  const reports = (cache.reports || []).slice()
+    .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  const pending = reports.filter(r => r.status !== '확인');
+
+  if (tabCnt) tabCnt.textContent = pending.length ? `(${pending.length})` : '';
+  if (cnt) cnt.textContent = reports.length ? `${reports.length}건 · 대기 ${pending.length}건` : '';
+
+  if (!reports.length) {
+    box.innerHTML = '<div class="empty">아직 들어온 제보가 없습니다.</div>';
+    return;
+  }
+  box.innerHTML = reports.map(r => {
+    const resolved = r.status === '확인';
+    const badge = r.type === '건의'
+      ? '<span class="report-badge idea">💡 건의</span>'
+      : '<span class="report-badge bug">🐞 버그</span>';
+    const who = r.name ? escapeHtml(r.name) : '익명';
+    return `
+      <div class="report-item${resolved ? ' resolved' : ''}">
+        <div class="rhead">
+          ${badge}
+          <span class="rname">${who}</span>
+          ${resolved ? '<span class="report-status">확인됨</span>' : ''}
+          <span class="rtime">${fmtSubmittedAt(r.created_at)}</span>
+        </div>
+        <div class="rbody">${escapeHtml(r.content)}</div>
+        <div class="ractions">
+          <button class="btn-ghost btn-sm" onclick="toggleReport('${escapeAttr(r.id)}', ${resolved})">${resolved ? '↩ 대기로' : '✓ 확인 완료'}</button>
+          <button class="btn-danger btn-sm" onclick="removeReport('${escapeAttr(r.id)}')">삭제</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function toggleReport(id, currentlyResolved) {
+  const res = await apiPost('updateReport', { id, status: currentlyResolved ? '대기' : '확인' });
+  if (res.ok) await loadAll(false);
+  else toast('실패: ' + res.error, true);
+}
+
+async function removeReport(id) {
+  if (!confirm('이 제보를 삭제할까요?')) return;
+  const res = await apiPost('deleteReport', { id });
+  if (res.ok) { toast('삭제됨'); await loadAll(false); }
+  else toast('실패: ' + res.error, true);
+}
+
 function switchTab(t) {
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
   document.getElementById('tab-employee').classList.toggle('hide', t !== 'employee');
@@ -1110,7 +1256,7 @@ function switchTab(t) {
 // 관리자 대시보드 내부 서브탭 전환 (현황 / 직원 / 설정)
 function switchMgrTab(t) {
   document.querySelectorAll('.subtab').forEach(b => b.classList.toggle('active', b.dataset.subtab === t));
-  ['overview', 'staff', 'settings'].forEach(id => {
+  ['overview', 'staff', 'settings', 'reports'].forEach(id => {
     document.getElementById('mgr-' + id).classList.toggle('hide', id !== t);
   });
 }
@@ -1133,6 +1279,7 @@ function escapeAttr(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, '&q
     loadEmpForName(e.target.value);
   });
   document.getElementById('empMemo').addEventListener('input', updateMemoCounter);
+  document.getElementById('reportContent').addEventListener('input', updateReportCounter);
 
   // 마감일 설정 입력값이 바뀔 때마다 미리보기 즉시 갱신
   document.getElementById('setDeadlineOn').addEventListener('change', updateDeadlinePreview);
