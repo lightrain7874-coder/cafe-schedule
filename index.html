@@ -121,16 +121,6 @@
     .hcell { min-height: 48px; padding: 4px 2px; }
     .hcell .num { font-size: 14px; }
   }
-  .tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .stats-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .stats-table th { background: #f5e8d8; color: #5a3e2b; font-weight: 700; padding: 8px 10px; text-align: center; border-bottom: 2px solid #e0c896; white-space: nowrap; }
-  .stats-table th:first-child { text-align: left; }
-  .stats-table td { padding: 7px 10px; text-align: center; border-bottom: 1px solid #f0e8d8; white-space: nowrap; color: #3a2e26; }
-  .stats-table td:first-child { text-align: left; font-weight: 600; }
-  .stats-table tr:last-child td { border-bottom: none; }
-  .stats-table tr:hover td { background: #fafaf7; }
-  .stats-table .no-sub td { color: #b0a394; }
-  .wage-note { font-size: 11px; color: #9a8a7a; margin-top: 10px; line-height: 1.7; }
 </style>
 </head>
 <body>
@@ -309,34 +299,6 @@
       </div>
     </div>
 
-    <div class="card" id="statsCard">
-      <div class="card-title">📊 통합 통계 대시보드 <span class="muted" id="statsWeekLabel"></span></div>
-      <div id="payPeriodInfo" style="font-size:12px; color:#7a6b5e; margin-bottom:10px;"></div>
-      <div class="tbl-wrap">
-        <table class="stats-table">
-          <thead>
-            <tr>
-              <th>이름</th>
-              <th>오픈</th><th>미들</th><th>마감</th>
-              <th>가용시간</th><th>야간↑</th><th>주휴↑</th>
-              <th>이번 주급 (예상)</th><th>결제기간 합계 (예상)</th>
-            </tr>
-          </thead>
-          <tbody id="statsBody"></tbody>
-        </table>
-      </div>
-      <div class="wage-note" id="wageNote"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">📅 주차별 히스토리</div>
-      <label>조회할 주차 선택</label>
-      <select id="historyWeek" onchange="renderHistoryView()" style="margin-bottom:14px;">
-        <option value="">— 주차 선택 —</option>
-      </select>
-      <div id="historyContent"><div class="empty">주차를 선택하면 해당 주의 데이터를 볼 수 있습니다.</div></div>
-    </div>
-
     <div class="card">
       <div class="card-title">📊 데이터 관리</div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -390,11 +352,6 @@ const SHIFTS = [
   { key: 'middle', label: '미들',   time: '13:00-18:00' },
   { key: 'close',  label: '마감',   time: '18:00-22:30' },
 ];
-
-// 급여 계산 상수
-const MIN_WAGE = 10030;                              // 2025년 최저시급 (원)
-const SHIFT_HOURS  = { open: 5.0, middle: 5.0, close: 4.5 };
-const NIGHT_BONUS  = { open: 0,   middle: 0,   close: 0.25 }; // 22:00~22:30 (0.5h×50%)
 
 let cache = { roster: [], submissions: [], settings: Object.assign({}, DEFAULT_SETTINGS) };
 let week = '';
@@ -884,8 +841,6 @@ function renderManager() {
   renderMemoCard();
   renderHeatmap();
   renderSettingsCard();
-  renderStatsCard();
-  renderHistoryCard();
 }
 
 // 마감일 설정 카드를 cache.settings 값으로 채워주기
@@ -1126,140 +1081,6 @@ function exportText() {
   navigator.clipboard.writeText(txt).then(() => toast('전체 요약 복사됨 ✓'));
 }
 
-
-// ---------- 급여 계산 ----------
-function calcWeekPayData(sub) {
-  const c = {
-    open:   strToDays(sub.open).filter(Boolean).length,
-    middle: strToDays(sub.middle).filter(Boolean).length,
-    close:  strToDays(sub.close).filter(Boolean).length,
-  };
-  const rawH    = c.open * SHIFT_HOURS.open + c.middle * SHIFT_HOURS.middle + c.close * SHIFT_HOURS.close;
-  const nightH  = c.close * NIGHT_BONUS.close;
-  const juHyuH  = rawH >= 15 ? Math.min((rawH / 40) * 8, 8) : 0;
-  const pay     = Math.round((rawH + nightH + juHyuH) * MIN_WAGE);
-  return { c, rawH, nightH, juHyuH, pay, hasJuHyu: rawH >= 15 };
-}
-
-function getCurrentPayPeriod() {
-  const today = new Date();
-  const y = today.getFullYear(), mo = today.getMonth(), day = today.getDate();
-  let sy, sm, ey, em;
-  if (day >= 11) {
-    sy = y; sm = mo;
-    em = mo + 1 > 11 ? 0 : mo + 1;
-    ey = mo + 1 > 11 ? y + 1 : y;
-  } else {
-    sm = mo - 1 < 0 ? 11 : mo - 1;
-    sy = mo - 1 < 0 ? y - 1 : y;
-    em = mo; ey = y;
-  }
-  return {
-    start: new Date(sy, sm, 11),
-    end:   new Date(ey, em, 10, 23, 59, 59),
-    label: `${sm + 1}/11 ~ ${em + 1}/10`
-  };
-}
-
-function getWeeksInPayPeriod() {
-  const { start, end } = getCurrentPayPeriod();
-  return [...new Set(cache.submissions.map(s => s.week_start))]
-    .sort()
-    .filter(ws => { const d = new Date(ws + 'T00:00:00'); return d >= start && d <= end; });
-}
-
-function fmtWon(n) {
-  return n.toLocaleString('ko-KR') + '원';
-}
-
-function renderStatsCard() {
-  const m = getSubMap();
-  const period = getCurrentPayPeriod();
-  const periodWeeks = getWeeksInPayPeriod();
-
-  document.getElementById('statsWeekLabel').textContent = week ? fmtWeekRange(week) : '';
-  document.getElementById('payPeriodInfo').textContent =
-    `결제기간 ${period.label} · ${periodWeeks.length}주 포함 (매월 10일 월급 기준)`;
-
-  const tbody = document.getElementById('statsBody');
-  tbody.innerHTML = '';
-
-  cache.roster.forEach(name => {
-    const sub = m[name];
-    const tr = document.createElement('tr');
-    if (!sub) {
-      tr.className = 'no-sub';
-      tr.innerHTML = `<td>${escapeHtml(name)}</td>` + '<td>-</td>'.repeat(8);
-    } else {
-      const d = calcWeekPayData(sub);
-      let monthlyPay = 0;
-      periodWeeks.forEach(ws => {
-        const s = cache.submissions.find(x => x.name === name && x.week_start === ws);
-        if (s) monthlyPay += calcWeekPayData(s).pay;
-      });
-      tr.innerHTML = `
-        <td>${escapeHtml(name)}</td>
-        <td>${d.c.open}회</td><td>${d.c.middle}회</td><td>${d.c.close}회</td>
-        <td>${d.rawH.toFixed(1)}h</td>
-        <td>${d.nightH > 0 ? '+' + d.nightH.toFixed(2) + 'h' : '-'}</td>
-        <td>${d.hasJuHyu ? '✓' : '-'}</td>
-        <td style="font-weight:600;">${fmtWon(d.pay)}</td>
-        <td style="font-weight:700; color:#5a3e2b;">${periodWeeks.length ? fmtWon(monthlyPay) : '-'}</td>
-      `;
-    }
-    tbody.appendChild(tr);
-  });
-
-  document.getElementById('wageNote').innerHTML =
-    `최저시급 ${MIN_WAGE.toLocaleString()}원 기준 · 마감 야간수당(22:00~22:30, 50% 가산) · 주휴수당(주 15h 이상 자동 적용)<br>` +
-    `※ 실제 배정 시간이 아닌 <b>제출한 가용 시간 기준 추정값</b>입니다`;
-}
-
-function renderHistoryCard() {
-  const sel = document.getElementById('historyWeek');
-  const allWeeks = [...new Set(cache.submissions.map(s => s.week_start))].sort().reverse();
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">— 주차 선택 —</option>' +
-    allWeeks.map(ws => `<option value="${ws}"${ws === cur ? ' selected' : ''}>${ws} (${fmtWeekRange(ws)})</option>`).join('');
-  if (cur && allWeeks.includes(cur)) renderHistoryView();
-}
-
-function renderHistoryView() {
-  const ws = document.getElementById('historyWeek').value;
-  const el = document.getElementById('historyContent');
-  if (!ws) {
-    el.innerHTML = '<div class="empty">주차를 선택하면 해당 주의 데이터를 볼 수 있습니다.</div>';
-    return;
-  }
-  const subs = {};
-  cache.submissions.filter(s => s.week_start === ws).forEach(s => { subs[s.name] = s; });
-  const done = cache.roster.filter(n => subs[n]).length;
-  const rate = cache.roster.length ? Math.round(done / cache.roster.length * 100) : 0;
-
-  let html = `
-    <div class="stat-row" style="margin-bottom:12px;">
-      <div class="stat good"><div class="n">${done}</div><div class="l">제출 완료</div></div>
-      <div class="stat warn"><div class="n">${cache.roster.length - done}</div><div class="l">미제출</div></div>
-      <div class="stat"><div class="n">${cache.roster.length}</div><div class="l">전체 인원</div></div>
-      <div class="stat"><div class="n">${rate}%</div><div class="l">제출률</div></div>
-    </div>
-    <table class="heat"><thead><tr><th></th>
-      <th>월</th><th>화</th><th>수</th><th>목</th><th>금</th>
-      <th style="color:#c44;">토</th><th style="color:#c44;">일</th>
-    </tr></thead><tbody>
-  `;
-  SHIFTS.forEach(s => {
-    html += `<tr><th class="shift" style="text-align:left;"><div class="shift-label">${s.label}<span class="shift-time">${s.time}</span></div></th>`;
-    for (let d = 0; d < 7; d++) {
-      const n = cache.roster.filter(nm => subs[nm] && strToDays(subs[nm][s.key])[d]).length;
-      const cls = n === 0 ? 'h0' : n <= 3 ? 'h1' : n <= 7 ? 'h2' : n <= 11 ? 'h3' : 'h4';
-      html += `<td><div class="hcell ${cls}" style="cursor:default;"><div class="num">${n}</div><div class="lbl">${n ? '명' : '-'}</div></div></td>`;
-    }
-    html += '</tr>';
-  });
-  html += '</tbody></table>';
-  el.innerHTML = html;
-}
 
 function switchTab(t) {
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
