@@ -163,7 +163,8 @@
 
   <div class="tabs">
     <button class="tab active" data-tab="employee" onclick="switchTab('employee')">스텝 입력</button>
-    <button class="tab" data-tab="manager" onclick="switchTab('manager')">관리자 대시보드</button>
+    <button class="tab" data-tab="mypage" onclick="switchTab('mypage')">마이페이지</button>
+    <button class="tab" data-tab="manager" onclick="switchTab('manager')">관리자</button>
   </div>
 
   <!-- ============ EMPLOYEE TAB ============ -->
@@ -225,6 +226,28 @@
         <button class="btn-primary" id="submitBtn" style="flex:1;" onclick="submit()">✓ 제출하기</button>
       </div>
       <p id="empPrev" class="sub" style="margin-top:10px; text-align:center;"></p>
+    </div>
+  </div>
+
+  <!-- ============ MYPAGE TAB ============ -->
+  <div id="tab-mypage" class="hide">
+    <div class="card">
+      <div class="card-title">👤 내 정보</div>
+      <label>이름</label>
+      <select id="myName">
+        <option value="">— 본인 이름을 선택하세요 —</option>
+      </select>
+      <p class="sub" id="myNameHint" style="margin-top:6px;"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔒 비밀번호 <span class="muted">내 스케줄 보호 (선택)</span></div>
+      <div id="myPwBody"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">💰 근무시간 · 월급</div>
+      <p class="sub">시작–종료 시각으로 근무를 직접 입력하고 야간·주휴수당까지 자동 계산하는 기능이 다음 업데이트에서 추가됩니다.</p>
     </div>
   </div>
 
@@ -375,6 +398,19 @@
   </div>
 </div>
 
+<!-- 잠금 해제 모달 -->
+<div class="modal-bg" id="unlockModal" onclick="if(event.target.id==='unlockModal')closeUnlockModal()">
+  <div class="modal">
+    <h3>🔒 잠금 해제</h3>
+    <div class="meta" id="unlockMeta"></div>
+    <input type="password" id="unlockPw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doUnlock()">
+    <div style="display:flex; gap:8px; margin-top:14px; justify-content:flex-end;">
+      <button class="btn-ghost btn-sm" onclick="closeUnlockModal()">취소</button>
+      <button class="btn-primary btn-sm" id="unlockBtn" onclick="doUnlock()">해제</button>
+    </div>
+  </div>
+</div>
+
 <!-- 제보 모달 -->
 <div class="modal-bg" id="reportModal" onclick="if(event.target.id==='reportModal')closeReportModal()">
   <div class="modal">
@@ -423,7 +459,7 @@ const SHIFTS = [
   { key: 'close',  label: '마감',   time: '18:00-22:30' },
 ];
 
-let cache = { roster: [], submissions: [], settings: Object.assign({}, DEFAULT_SETTINGS), reports: [] };
+let cache = { roster: [], submissions: [], settings: Object.assign({}, DEFAULT_SETTINGS), reports: [], locks: {} };
 let week = '';
 let empState = {};
 SHIFTS.forEach(s => empState[s.key] = Array(7).fill(false));
@@ -467,6 +503,7 @@ async function loadAll(showToast) {
     cache.roster = data.roster || [];
     cache.submissions = data.submissions || [];
     cache.reports = data.reports || [];
+    cache.locks = data.locks || {};
     if (data.settings) cache.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings);
     setSyncStatus('ok', `시트 연결됨 · ${new Date().toLocaleTimeString()}`);
     detectNewSubmissions();  // 새 제출 알림 (관리자 인증된 상태일 때만)
@@ -782,6 +819,12 @@ async function submit() {
   const total = SHIFTS.reduce((a,s) => a + empState[s.key].filter(Boolean).length, 0);
   if (total === 0) { toast('가능한 시간을 1개 이상 선택해주세요', true); return; }
 
+  // 비밀번호 잠금: 토큰이 없으면 잠금 해제 먼저 (성공하면 submit 재시도)
+  if (isLocked(name) && !getToken(name)) {
+    openUnlockModal(name, submit);
+    return;
+  }
+
   const memo = document.getElementById('empMemo').value.trim();
 
   const btn = document.getElementById('submitBtn');
@@ -794,9 +837,18 @@ async function submit() {
       middle: daysToStr(empState.middle),
       close: daysToStr(empState.close),
       total,
-      memo
+      memo,
+      token: getToken(name)
     });
-    if (!res.ok) throw new Error(res.error);
+    if (!res.ok) {
+      if (res.error === 'auth') {
+        // 토큰 만료/무효 → 다시 잠금 해제 후 재시도
+        clearToken(name);
+        openUnlockModal(name, submit);
+        return;
+      }
+      throw new Error(res.error);
+    }
     setMyName(name);  // 본인 이름 자동 기억
     toast(`${name}님 제출 완료 ✓`);
     await loadAll(false);
@@ -1247,10 +1299,128 @@ async function removeReport(id) {
   else toast('실패: ' + res.error, true);
 }
 
+// ---------- 로그인 / 비밀번호 (선택) ----------
+function tokenKey(name) { return 'cs_token_' + name; }
+function getToken(name) { return localStorage.getItem(tokenKey(name)) || ''; }
+function setToken(name, t) { if (t) localStorage.setItem(tokenKey(name), t); else localStorage.removeItem(tokenKey(name)); }
+function clearToken(name) { localStorage.removeItem(tokenKey(name)); }
+function isLocked(name) { return !!(cache.locks && cache.locks[name]); }
+
+let unlockCtx = { name: '', onSuccess: null };
+function openUnlockModal(name, onSuccess) {
+  unlockCtx = { name: name, onSuccess: onSuccess };
+  document.getElementById('unlockMeta').textContent = `${name}님의 비밀번호를 입력하세요.`;
+  document.getElementById('unlockPw').value = '';
+  document.getElementById('unlockModal').classList.add('show');
+  setTimeout(() => document.getElementById('unlockPw').focus(), 50);
+}
+function closeUnlockModal() { document.getElementById('unlockModal').classList.remove('show'); }
+async function doUnlock() {
+  const pw = document.getElementById('unlockPw').value;
+  if (!pw) { toast('비밀번호를 입력하세요', true); return; }
+  const btn = document.getElementById('unlockBtn');
+  btn.disabled = true; btn.textContent = '확인 중...';
+  try {
+    const res = await apiPost('login', { name: unlockCtx.name, password: pw });
+    if (!res.ok) { toast(res.error === 'wrong password' ? '비밀번호가 틀립니다' : '실패: ' + res.error, true); return; }
+    setToken(unlockCtx.name, res.token);
+    closeUnlockModal();
+    toast('잠금 해제됨 🔓');
+    const cb = unlockCtx.onSuccess;
+    if (cb) cb();
+  } catch (err) {
+    toast('오류: ' + err.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '해제';
+  }
+}
+
+// ---------- 마이페이지 ----------
+function renderMypage() {
+  const sel = document.getElementById('myName');
+  const cur = sel.value || getMyName();
+  sel.innerHTML = '<option value="">— 본인 이름을 선택하세요 —</option>' +
+    cache.roster.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+  if (cache.roster.includes(cur)) sel.value = cur;
+  renderMypagePassword();
+}
+
+function renderMypagePassword() {
+  const name = document.getElementById('myName').value;
+  const body = document.getElementById('myPwBody');
+  if (!name) {
+    body.innerHTML = '<p class="sub">이름을 선택하면 비밀번호를 설정할 수 있어요.</p>';
+    return;
+  }
+  if (!isLocked(name)) {
+    body.innerHTML = `
+      <p class="sub" style="margin-bottom:10px;">아직 비밀번호가 없어요. 설정하면 다른 사람이 내 가능시간을 수정할 수 없습니다.</p>
+      <input type="password" id="pwNew1" placeholder="새 비밀번호" style="margin-bottom:8px;">
+      <input type="password" id="pwNew2" placeholder="새 비밀번호 확인" style="margin-bottom:10px;">
+      <button class="btn-primary" style="width:100%;" onclick="savePassword()">🔒 비밀번호 설정</button>`;
+  } else {
+    body.innerHTML = `
+      <p class="sub" style="margin-bottom:10px;">🔒 비밀번호가 설정돼 있어요.</p>
+      <label>비밀번호 변경</label>
+      <input type="password" id="pwCur" placeholder="현재 비밀번호" style="margin-bottom:8px;">
+      <input type="password" id="pwNew1" placeholder="새 비밀번호" style="margin-bottom:10px;">
+      <button class="btn-primary" style="width:100%; margin-bottom:16px;" onclick="changePassword()">변경</button>
+      <label>비밀번호 해제</label>
+      <input type="password" id="pwRemove" placeholder="현재 비밀번호" style="margin-bottom:10px;">
+      <button class="btn-danger" style="width:100%;" onclick="removePassword()">🔓 비밀번호 해제</button>`;
+  }
+}
+
+async function savePassword() {
+  const name = document.getElementById('myName').value;
+  const p1 = document.getElementById('pwNew1').value;
+  const p2 = document.getElementById('pwNew2').value;
+  if (!name) { toast('이름을 선택하세요', true); return; }
+  if (!p1) { toast('비밀번호를 입력하세요', true); return; }
+  if (p1 !== p2) { toast('비밀번호 확인이 일치하지 않습니다', true); return; }
+  const res = await apiPost('setPassword', { name, newPassword: p1 });
+  if (res.ok) {
+    if (res.token) setToken(name, res.token);
+    toast('비밀번호 설정 완료 🔒');
+    await loadAll(false);
+    renderMypage();
+  } else toast('실패: ' + res.error, true);
+}
+
+async function changePassword() {
+  const name = document.getElementById('myName').value;
+  const cur = document.getElementById('pwCur').value;
+  const nw = document.getElementById('pwNew1').value;
+  if (!cur || !nw) { toast('현재/새 비밀번호를 모두 입력하세요', true); return; }
+  const res = await apiPost('setPassword', { name, oldPassword: cur, newPassword: nw });
+  if (res.ok) {
+    if (res.token) setToken(name, res.token);
+    toast('비밀번호 변경 완료 ✓');
+    await loadAll(false);
+    renderMypage();
+  } else toast(res.error === 'wrong password' ? '현재 비밀번호가 틀립니다' : '실패: ' + res.error, true);
+}
+
+async function removePassword() {
+  const name = document.getElementById('myName').value;
+  const cur = document.getElementById('pwRemove').value;
+  if (!cur) { toast('현재 비밀번호를 입력하세요', true); return; }
+  if (!confirm('비밀번호를 해제할까요?\n누구나 내 가능시간을 수정할 수 있게 됩니다.')) return;
+  const res = await apiPost('setPassword', { name, oldPassword: cur, newPassword: '' });
+  if (res.ok) {
+    clearToken(name);
+    toast('비밀번호 해제됨');
+    await loadAll(false);
+    renderMypage();
+  } else toast(res.error === 'wrong password' ? '현재 비밀번호가 틀립니다' : '실패: ' + res.error, true);
+}
+
 function switchTab(t) {
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
   document.getElementById('tab-employee').classList.toggle('hide', t !== 'employee');
+  document.getElementById('tab-mypage').classList.toggle('hide', t !== 'mypage');
   document.getElementById('tab-manager').classList.toggle('hide', t !== 'manager');
+  if (t === 'mypage') renderMypage();
 }
 
 // 관리자 대시보드 내부 서브탭 전환 (현황 / 직원 / 설정)
@@ -1277,6 +1447,10 @@ function escapeAttr(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, '&q
   document.getElementById('empName').addEventListener('change', e => {
     setMyName(e.target.value);  // 사용자가 직접 이름 바꿀 때도 자동 기억 갱신
     loadEmpForName(e.target.value);
+  });
+  document.getElementById('myName').addEventListener('change', e => {
+    setMyName(e.target.value);  // 마이페이지에서 이름 바꿔도 본인 이름 동기화
+    renderMypagePassword();
   });
   document.getElementById('empMemo').addEventListener('input', updateMemoCounter);
   document.getElementById('reportContent').addEventListener('input', updateReportCounter);
